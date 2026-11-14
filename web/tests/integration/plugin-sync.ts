@@ -9,12 +9,16 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../../server/app.ts';
-import { openDb } from '../../server/db.ts';
+import { makeStore } from '../helpers/store.ts';
 
 const tool = join(import.meta.dirname, '../../../build/UiShot');
 if (!existsSync(tool)) { console.log('UiShot is not built; skipping.'); process.exit(0); }
 
-const server = createServer(createApp(openDb(':memory:')));
+// SQLite in memory by default; STORE=firestore runs the same stages on a throwaway Firestore namespace,
+// which is deleted at the end whether or not they passed.
+const backing = await makeStore();
+const server = createServer(createApp(backing.store));
+try {
 await new Promise<void>((r) => server.listen(0, r));
 const base = `http://localhost:${(server.address() as AddressInfo).port}`;
 const dir = mkdtempSync(join(tmpdir(), 'stsync-'));
@@ -184,5 +188,8 @@ assert.deepEqual([lt.sources.length, lt.sources.filter((x: any) => x.receiptUplo
 assert.match(lt.events.map((e: any) => e.text).join('\n'), /earlier offline receipt was replaced by the live record/);
 step("a collaborator's receipt is added to the owner's song, and is replaced once their plugin syncs");
 
-server.close();
+} finally {
+  server.close();
+  await backing.close();
+}
 console.log('Plugin and website stay in sync in both directions.');

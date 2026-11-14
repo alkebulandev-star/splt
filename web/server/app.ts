@@ -9,7 +9,11 @@ import { promisify } from 'node:util';
 import type { Activity, ArtistCard, Evidence, SourceInfo, FingerprintDetails, LogLine, Signature, Message, PluginKey, Profile, StoredFingerprint, User, WorkDetail, WorkEvent, WorkSummary } from '../src/core/api.ts';
 import { makeArtistId, makeSongCode, normaliseArtistId, normaliseSongCode } from '../src/core/artistId.ts';
 import { fullyApproved, hasShare, personStatus, sendProblem, type Decision, type Person, type WorkStatus } from '../src/core/splits.ts';
-import { transaction, type Db, type Row } from './db.ts';
+import type { PersonInput, PersonRecord, SourceRecord, Store, StoreTx, UserRecord, WorkRecord } from './store.ts';
+import { eventGenesis, eventHash } from './store.ts';
+
+/** A JSON object as it arrives in a request. */
+type Json = Record<string, any>;
 
 const scryptAsync = promisify(scrypt) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
 
@@ -48,11 +52,11 @@ function percent(v: unknown, field: string): number {
   return Math.round(n * 100) / 100;
 }
 
-// ---------- rows to JSON ----------
+// ---------- records to JSON ----------
 
-const userJson = (u: Row): User => ({
-  id: u.id, email: u.email, artistId: u.artist_id, artistName: u.artist_name, legalName: u.legal_name, role: u.role, pro: u.pro,
-  ipi: u.ipi, publisher: u.publisher, publisherIpi: u.publisher_ipi, isni: u.isni, phone: u.phone,
+const userJson = (u: UserRecord): User => ({
+  id: u.id, email: u.email, artistId: u.artistId, artistName: u.artistName, legalName: u.legalName, role: u.role, pro: u.pro,
+  ipi: u.ipi, publisher: u.publisher, publisherIpi: u.publisherIpi, isni: u.isni, phone: u.phone,
 });
 
 export interface AppOptions {
@@ -62,46 +66,39 @@ export interface AppOptions {
   secureCookies?: boolean;
 }
 
-export function createApp(db: Db, options: AppOptions = {}) {
-  const failures = new Map<string, { count: number; resetAt: number }>();
+/**
+ * Builds the request handler on a store (server/store.ts).
+ *
+ * The helpers below take the store, or a transaction of it, as their first argument `s`, so the
+ * same code reads through whichever is in hand. Routes that change something do their checks and
+ * their writes inside one `store.transaction`, reads first and writes after, and build their reply
+ * from a fresh read once it has finished.
+ */
+export function createApp(store: Store, options: AppOptions = {}) {
 
   // ---------- Artist IDs ----------
 
-  function newArtistId(): string {
+  async function newArtistId(s: StoreTx): Promise<string> {
     for (;;) {
       const id = makeArtistId(randomBytes(7));
-      if (!db.prepare('SELECT 1 FROM users WHERE artist_id = ?').get(id)) return id;
+      if (!await s.userByArtistId(id)) return id;
     }
   }
-  // Accounts made before Artist IDs existed get one now.
-  for (const u of db.prepare('SELECT id FROM users WHERE artist_id IS NULL').all() as Row[])
-    db.prepare('UPDATE users SET artist_id = ? WHERE id = ?').run(newArtistId(), u.id);
 
-  function artistCard(raw: unknown): ArtistCard {
+  async function artistCard(raw: unknown): Promise<ArtistCard> {
     const id = normaliseArtistId(typeof raw === 'string' ? raw : '');
     if (!id) throw new HttpError(400, 'That is not an Artist ID. It looks like ST-7K2Q-9FXM.');
-    const u = db.prepare('SELECT * FROM users WHERE artist_id = ?').get(id) as Row | undefined;
+    const u = await store.userByArtistId(id);
     if (!u) throw new HttpError(404, 'No account has that Artist ID. They need to sign up first.');
-    return { artistId: u.artist_id, artistName: u.artist_name, legalName: u.legal_name, role: u.role, pro: u.pro, ipi: u.ipi, publisher: u.publisher, publisherIpi: u.publisher_ipi, email: u.email };
+    return { artistId: u.artistId, artistName: u.artistName, legalName: u.legalName, role: u.role, pro: u.pro, ipi: u.ipi, publisher: u.publisher, publisherIpi: u.publisherIpi, email: u.email };
   }
 
   // ---------- history ----------
 
-  const genesis = (workId: string) => sha256(`GENESIS|${workId}`);
-  const entryHash = (prev: string, time: number, type: string, body: string) => sha256(`${prev}|${time}|${type}|${body}`);
-
-  function addEvent(workId: string, type: string, body: string): void {
-    const last = db.prepare('SELECT hash FROM events WHERE work_id = ? ORDER BY id DESC LIMIT 1').get(workId) as Row | undefined;
-    const time = Date.now();
-    db.prepare('INSERT INTO events (work_id, time, type, text, hash) VALUES (?, ?, ?, ?, ?)')
-      .run(workId, time, type, body, entryHash(last?.hash ?? genesis(workId), time, type, body));
-    db.prepare('UPDATE works SET updated_at = ? WHERE id = ?').run(time, workId);
-  }
-
   function chainIntact(workId: string, events: WorkEvent[]): boolean {
-    let prev = genesis(workId);
+    let prev = eventGenesis(workId);
     for (const e of events) {
-      if (e.hash !== entryHash(prev, e.time, e.type, e.text)) return false;
+      if (e.hash !== eventHash(prev, e.time, e.type, e.text)) return false;
       prev = e.hash;
     }
     return true;
@@ -109,10 +106,10 @@ export function createApp(db: Db, options: AppOptions = {}) {
 
   // ---------- sessions ----------
 
-  function startSession(res: ServerResponse, userId: number): void {
+  async function startSession(res: ServerResponse, userId: number): Promise<void> {
     const token = randomBytes(32).toString('base64url');
     const maxAge = SESSION_DAYS * 86_400;
-    db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').run(sha256(token), userId, Date.now() + maxAge * 1000);
+    await store.createSession(sha256(token), userId, Date.now() + maxAge * 1000);
     res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${options.secureCookies ? '; Secure' : ''}`);
   }
 
@@ -124,111 +121,100 @@ export function createApp(db: Db, options: AppOptions = {}) {
     return null;
   }
 
-  function currentUser(req: IncomingMessage): Row | null {
+  async function currentUser(req: IncomingMessage): Promise<UserRecord | null> {
     const token = sessionToken(req);
     if (!token) return null;
-    const row = db.prepare(
-      'SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?',
-    ).get(sha256(token), Date.now()) as Row | undefined;
-    return row ?? null;
+    return store.userBySession(sha256(token), Date.now());
   }
 
-  function requireUser(req: IncomingMessage): Row {
-    const u = currentUser(req);
+  async function requireUser(req: IncomingMessage): Promise<UserRecord> {
+    const u = await currentUser(req);
     if (!u) throw new HttpError(401, 'Sign in to continue');
     return u;
   }
 
   // ---------- works ----------
 
-  /** Who may see a song: its owner, whoever started it, anyone whose own project feeds it, and,
-      once it has been sent, anyone on its split sheet. For everyone else it does not exist. */
-  const VISIBLE = `(w.owner_id = @uid OR w.created_by = @uid
-      OR EXISTS (SELECT 1 FROM sources s WHERE s.work_id = w.id AND s.user_id = @uid)
-      OR (w.shared = 1 AND EXISTS (SELECT 1 FROM people p WHERE p.work_id = w.id AND p.email = @email)))`;
-
-  function visibleWork(user: Row, id: string): Row {
-    const w = db.prepare(`SELECT * FROM works w WHERE w.id = @id AND ${VISIBLE}`).get({ id, uid: user.id, email: user.email }) as Row | undefined;
+  /** The song, for someone who may see it (the store decides who may). For everyone else it does not exist. */
+  async function visibleWork(s: StoreTx, user: UserRecord, id: string): Promise<WorkRecord> {
+    const w = await s.workVisibleTo(user, id);
     if (!w) throw new HttpError(404, 'Song not found');
     return w;
   }
 
   /** The owner, and the person who started the song, may change it. */
-  const manages = (user: Row, w: Row): boolean => w.owner_id === user.id || w.created_by === user.id;
+  const manages = (user: UserRecord, w: WorkRecord): boolean => w.ownerId === user.id || w.createdBy === user.id;
 
-  function newSongCode(): string {
+  async function newSongCode(s: StoreTx): Promise<string> {
     for (;;) {
       const code = makeSongCode(randomBytes(7));
-      if (!db.prepare('SELECT 1 FROM works WHERE song_code = ?').get(code)) return code;
+      if (!await s.workBySongCode(code)) return code;
     }
   }
-  // Songs made before song codes existed get one now.
-  for (const w of db.prepare('SELECT id FROM works WHERE song_code IS NULL').all() as Row[])
-    db.prepare('UPDATE works SET song_code = ? WHERE id = ?').run(newSongCode(), w.id);
 
-  const peopleOf = (workId: string): Row[] =>
-    db.prepare('SELECT * FROM people WHERE work_id = ? ORDER BY position').all(workId) as Row[];
+  const shareOf = (p: { writerShare: number; masterShare: number }) => hasShare({ writerShare: p.writerShare, masterShare: p.masterShare });
 
-  const shareOf = (p: Row) => hasShare({ writerShare: p.writer_share, masterShare: p.master_share });
-
-  function summary(user: Row, w: Row, people = peopleOf(w.id)): WorkSummary {
+  async function summary(s: StoreTx, user: UserRecord, w: WorkRecord, given?: PersonRecord[]): Promise<WorkSummary> {
+    const people = given ?? await s.peopleOf(w.id);
     const mine = people.find((p) => p.email === user.email);
     const sent = w.status === 'sent';
-    const owner = db.prepare('SELECT artist_name, artist_id FROM users WHERE id = ?').get(w.owner_id) as Row;
+    const owner = (await s.userById(w.ownerId))!;
     return {
-      id: w.id, title: w.title, album: w.album, status: w.status as WorkStatus, isOwner: manages(user, w),
-      songCode: w.song_code, ownerName: owner.artist_name, ownerArtistId: owner.artist_id, ownerStated: !!w.owner_stated, youOwn: w.owner_id === user.id,
-      people: people.map((p) => p.artist_name),
-      yourWriterShare: mine ? mine.writer_share : null,
+      id: w.id, title: w.title, album: w.album, status: w.status, isOwner: manages(user, w),
+      songCode: w.songCode, ownerName: owner.artistName, ownerArtistId: owner.artistId, ownerStated: w.ownerStated, youOwn: w.ownerId === user.id,
+      people: people.map((p) => p.artistName),
+      yourWriterShare: mine ? mine.writerShare : null,
       awaiting: sent ? people.filter((p) => shareOf(p) && p.decision !== 'approved').length : 0,
       needsYou: sent && !!mine && mine.decision === 'none' && shareOf(mine),
-      updatedAt: w.updated_at,
+      updatedAt: w.updatedAt,
     };
   }
 
-  const personJson = (w: Row, p: Row): Person => ({
-    artistName: p.artist_name, legalName: p.legal_name, role: p.role, writerShare: p.writer_share, masterShare: p.master_share,
-    email: p.email, status: personStatus(w.status, p.decision as Decision, shareOf(p)),
-    hasAccount: !!p.email && !!db.prepare('SELECT 1 FROM users WHERE email = ?').get(p.email),
-    artistId: p.artist_id, pro: p.pro, ipi: p.ipi, publisher: p.publisher, publisherIpi: p.publisher_ipi, terms: p.terms, seconds: p.seconds,
-  });
+  /** A split sheet as the page shows it, with whether each person has an account. */
+  async function sheetRows(s: StoreTx, status: WorkStatus, people: PersonRecord[]): Promise<Person[]> {
+    const accounts = new Set(await s.emailsWithAccount(people.map((p) => p.email).filter(Boolean)));
+    return people.map((p) => ({
+      artistName: p.artistName, legalName: p.legalName, role: p.role, writerShare: p.writerShare, masterShare: p.masterShare,
+      email: p.email, status: personStatus(status, p.decision, shareOf(p)),
+      hasAccount: !!p.email && accounts.has(p.email),
+      artistId: p.artistId, pro: p.pro, ipi: p.ipi, publisher: p.publisher, publisherIpi: p.publisherIpi, terms: p.terms, seconds: p.seconds,
+    }));
+  }
 
-  function detail(user: Row, w: Row): WorkDetail {
-    const people = peopleOf(w.id);
-    const messages: Message[] = (db.prepare(
-      'SELECT m.id, m.body, m.created_at, m.user_id, u.artist_name FROM messages m JOIN users u ON u.id = m.user_id WHERE m.work_id = ? ORDER BY m.id',
-    ).all(w.id) as Row[]).map((m) => ({ id: m.id, author: m.artist_name, mine: m.user_id === user.id, body: m.body, time: m.created_at }));
-    const events = db.prepare('SELECT time, type, text, hash FROM events WHERE work_id = ? ORDER BY id').all(w.id) as unknown as WorkEvent[];
+  async function detail(s: StoreTx, user: UserRecord, w: WorkRecord): Promise<WorkDetail> {
+    // Independent reads, asked for together: a store that answers over a network need not be waited on one at a time.
+    const [people, stored, events, sources] = await Promise.all([s.peopleOf(w.id), s.messagesOf(w.id), s.eventsOf(w.id) as Promise<WorkEvent[]>, loadSources(s, w.id)]);
+    const messages: Message[] = stored.map((m) => ({ id: m.id, author: m.authorName, mine: m.userId === user.id, body: m.body, time: m.createdAt }));
     const mine = people.find((p) => p.email === user.email);
+    const [top, rows] = await Promise.all([summary(s, user, w, people), sheetRows(s, w.status, people)]);
     return {
-      ...summary(user, w, people), rows: people.map((p) => personJson(w, p)), messages, events,
-      isrc: w.isrc, iswc: w.iswc, splitVersion: w.split_version, sources: sourceList(w),
-      yourDecision: mine ? (mine.decision as Decision) : null,
+      ...top, rows, messages, events,
+      isrc: w.isrc, iswc: w.iswc, splitVersion: w.splitVersion, sources: sourceList(w, sources),
+      yourDecision: mine ? mine.decision : null,
       chainIntact: chainIntact(w.id, events),
-      evidence: evidenceOf(w.id),
+      evidence: evidenceOf(w.ownerId, sources),
     };
   }
 
-  /** Writes a whole split sheet. Rows may name an account by Artist ID; that fixes the row's email. */
-  interface RowIn { artistName: string; legalName: string; role: string; writerShare: number; masterShare: number; email: string; artistId: string; pro: string; ipi: string; publisher: string; publisherIpi: string; terms: string; seconds: number }
-  function writePeople(workId: string, rows: RowIn[]): void {
-    db.prepare('DELETE FROM people WHERE work_id = ?').run(workId);
-    const insert = db.prepare(`INSERT INTO people (work_id, position, artist_name, legal_name, role, writer_share, master_share, email, artist_id, pro, ipi, publisher, publisher_ipi, terms, seconds)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  /** One row of a split sheet as it comes in. Rows may name an account by Artist ID; that fixes the row's email. */
+  type RowIn = PersonInput;
+
+  /** Ties each row to its account (by Artist ID, else by email) and makes sure no address is on the sheet twice. Reads only. */
+  async function resolveRows(s: StoreTx, rows: RowIn[]): Promise<PersonInput[]> {
     const used = new Set<string>();
-    rows.forEach((r, i) => {
-      const account = r.artistId ? db.prepare('SELECT email, artist_id FROM users WHERE artist_id = ?').get(r.artistId) as Row | undefined
-        : r.email ? db.prepare('SELECT email, artist_id FROM users WHERE email = ?').get(r.email) as Row | undefined : undefined;
+    const out: PersonInput[] = [];
+    const accounts = await Promise.all(rows.map((r) => (r.artistId ? s.userByArtistId(r.artistId) : r.email ? s.userByEmail(r.email) : null)));
+    for (const [i, r] of rows.entries()) {
+      const account = accounts[i];
       let address = account?.email ?? r.email;
       if (used.has(address)) address = '';   // nobody approves twice
       if (address) used.add(address);
-      insert.run(workId, i, r.artistName, r.legalName, r.role, r.writerShare, r.masterShare, address, account?.artist_id ?? r.artistId, r.pro, r.ipi, r.publisher, r.publisherIpi, r.terms, r.seconds);
-    });
-    // Any change withdraws earlier approvals: people approve the sheet as it stands, not an older one.
-    db.prepare("UPDATE works SET status = 'draft', split_version = split_version + 1 WHERE id = ?").run(workId);
+      out.push({ ...r, email: address, artistId: account?.artistId ?? r.artistId });
+    }
+    return out;
   }
 
-  const rowIn = (p: Row): RowIn => ({
+  const rowIn = (p: Json): RowIn => ({
     artistName: text(p?.artistName, 'Artist name', 80, true), legalName: text(p?.legalName, 'Legal name', 120),
     role: text(p?.role, 'Role', 60) || 'Other', writerShare: percent(p?.writerShare ?? 0, 'Writer share'), masterShare: percent(p?.masterShare ?? 0, 'Master share'),
     email: email(p?.email, false), artistId: normaliseArtistId(text(p?.artistId, 'Artist ID', 20)) ?? '',
@@ -237,14 +223,15 @@ export function createApp(db: Db, options: AppOptions = {}) {
     seconds: Math.max(0, Math.round(Number(p?.seconds) || 0)),
   });
 
-  const fresh = (user: Row, id: string): WorkDetail => detail(user, visibleWork(user, id));
+  const fresh = async (user: UserRecord, id: string): Promise<WorkDetail> => detail(store, user, await visibleWork(store, user, id));
 
-  function signIfComplete(workId: string): void {
-    const people = peopleOf(workId);
-    const done = fullyApproved(people.map((p) => ({ share: hasShare({ writerShare: p.writer_share, masterShare: p.master_share }), decision: p.decision as Decision })));
-    if (!done) return;
-    db.prepare("UPDATE works SET status = 'signed' WHERE id = ?").run(workId);
-    addEvent(workId, 'SIGNED', 'Everyone with a share approved. The split sheet is signed.');
+  /** Whether everyone with a share has approved, given the sheet as read and the decisions about to be written. */
+  const completes = (people: PersonRecord[], changed: number[], decision: Decision): boolean =>
+    fullyApproved(people.map((p) => ({ share: shareOf(p), decision: changed.includes(p.id) ? decision : p.decision })));
+
+  async function sign(tx: StoreTx, workId: string): Promise<void> {
+    await tx.markSigned(workId);
+    await tx.appendEvent(workId, 'SIGNED', 'Everyone with a share approved. The split sheet is signed.');
   }
 
   const describeSplit = (rows: { artistName: string; writerShare: number; masterShare: number }[]): string =>
@@ -252,7 +239,7 @@ export function createApp(db: Db, options: AppOptions = {}) {
 
   // ---------- routes ----------
 
-  type Handler = (ctx: { req: IncomingMessage; res: ServerResponse; body: Row; raw: Buffer; params: string[] }) => unknown | Promise<unknown>;
+  type Handler = (ctx: { req: IncomingMessage; res: ServerResponse; body: Json; raw: Buffer; params: string[] }) => unknown | Promise<unknown>;
   interface RouteOptions {
     /** 'key' routes are called by the plugin with a plugin key instead of a browser session. */
     auth?: 'session' | 'key';
@@ -272,260 +259,256 @@ export function createApp(db: Db, options: AppOptions = {}) {
     if (password.length > 200) throw new HttpError(400, 'Password is too long');
     const artistName = text(body.artistName, 'Artist name', 80, true);
     const legalName = text(body.legalName, 'Legal name', 120, true);
-    if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(address)) throw new HttpError(409, 'That email already has an account. Sign in instead.');
+    if (await store.userByEmail(address)) throw new HttpError(409, 'That email already has an account. Sign in instead.');
 
     const salt = randomBytes(16);
     const hash = await scryptAsync(password, salt, 64);
-    const info = db.prepare(
-      'INSERT INTO users (email, pass_hash, pass_salt, artist_name, legal_name, created_at, artist_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    ).run(address, hash.toString('hex'), salt.toString('hex'), artistName, legalName, Date.now(), newArtistId());
-    startSession(res, Number(info.lastInsertRowid));
-    return userJson(db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid) as Row);
+    const created = await store.createUser({ email: address, passHash: hash.toString('hex'), passSalt: salt.toString('hex'), artistName, legalName,
+      createdAt: Date.now(), artistId: await newArtistId(store) });
+    await startSession(res, created.id);
+    return userJson(created);
   });
 
   route('POST', /^\/api\/login$/, async ({ req, res, body }) => {
     const address = email(body.email, true);
     const password = typeof body.password === 'string' ? body.password : '';
     const key = `${address}|${req.socket.remoteAddress}`;
-    const f = failures.get(key);
-    if (f && f.resetAt > Date.now() && f.count >= LOGIN_TRIES) throw new HttpError(429, 'Too many attempts. Wait 15 minutes and try again.');
+    if (await store.loginFailures(key, Date.now()) >= LOGIN_TRIES) throw new HttpError(429, 'Too many attempts. Wait 15 minutes and try again.');
 
-    const u = db.prepare('SELECT * FROM users WHERE email = ?').get(address) as Row | undefined;
+    const u = await store.userByEmail(address);
     // Hash even when the account does not exist, so the reply takes the same time either way.
-    const salt = u ? Buffer.from(u.pass_salt, 'hex') : Buffer.alloc(16);
+    const salt = u ? Buffer.from(u.passSalt, 'hex') : Buffer.alloc(16);
     const hash = await scryptAsync(password.slice(0, 200), salt, 64);
-    if (!u || !timingSafeEqual(hash, Buffer.from(u.pass_hash, 'hex'))) {
-      const cur = f && f.resetAt > Date.now() ? f : { count: 0, resetAt: Date.now() + LOGIN_WINDOW_MS };
-      cur.count++;
-      failures.set(key, cur);
+    if (!u || !timingSafeEqual(hash, Buffer.from(u.passHash, 'hex'))) {
+      await store.recordLoginFailure(key, Date.now(), LOGIN_WINDOW_MS);
       throw new HttpError(401, 'Email or password is incorrect');
     }
-    failures.delete(key);
-    startSession(res, u.id);
+    await store.clearLoginFailures(key);
+    await startSession(res, u.id);
     return userJson(u);
   });
 
-  route('POST', /^\/api\/logout$/, ({ req, res }) => {
+  route('POST', /^\/api\/logout$/, async ({ req, res }) => {
     const token = sessionToken(req);
-    if (token) db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(sha256(token));
+    if (token) await store.deleteSession(sha256(token));
     res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
     return { ok: true };
   });
 
-  route('GET', /^\/api\/me$/, ({ req }) => userJson(requireUser(req)));
+  route('GET', /^\/api\/me$/, async ({ req }) => userJson(await requireUser(req)));
 
-  route('PUT', /^\/api\/profile$/, ({ req, body }) => {
-    const u = requireUser(req);
+  route('PUT', /^\/api\/profile$/, async ({ req, body }) => {
+    const u = await requireUser(req);
     const p: Profile = {
       artistName: text(body.artistName, 'Artist name', 80, true), legalName: text(body.legalName, 'Legal name', 120, true),
       role: text(body.role, 'Role', 60) || 'Artist', pro: text(body.pro, 'PRO', 60), ipi: text(body.ipi, 'IPI number', 40),
       publisher: text(body.publisher, 'Publisher', 120), publisherIpi: text(body.publisherIpi, 'Publisher IPI', 40),
       isni: text(body.isni, 'ISNI', 40), phone: text(body.phone, 'Phone', 40),
     };
-    db.prepare(
-      'UPDATE users SET artist_name=?, legal_name=?, role=?, pro=?, ipi=?, publisher=?, publisher_ipi=?, isni=?, phone=? WHERE id=?',
-    ).run(p.artistName, p.legalName, p.role, p.pro, p.ipi, p.publisher, p.publisherIpi, p.isni, p.phone, u.id);
     // Draft sheets that name this account follow the profile. Sent and signed sheets stay as approved.
-    const drafts = db.prepare("SELECT DISTINCT p.work_id FROM people p JOIN works w ON w.id = p.work_id WHERE p.email = ? AND w.status = 'draft'").all(u.email) as Row[];
-    db.prepare(`UPDATE people SET artist_name = ?, legal_name = ?, pro = ?, ipi = ?, publisher = ?, publisher_ipi = ?
-                WHERE email = ? AND work_id IN (SELECT id FROM works WHERE status = 'draft')`).run(p.artistName, p.legalName, p.pro, p.ipi, p.publisher, p.publisherIpi, u.email);
-    for (const d of drafts) db.prepare('UPDATE works SET split_version = split_version + 1 WHERE id = ?').run(d.work_id);
-    return userJson(db.prepare('SELECT * FROM users WHERE id = ?').get(u.id) as Row);
+    return userJson(await store.updateProfile(u.id, p));
   });
 
-  const visibleWorks = (u: Row): Row[] =>
-    db.prepare(`SELECT * FROM works w WHERE ${VISIBLE} ORDER BY w.updated_at DESC`).all({ uid: u.id, email: u.email }) as Row[];
-
-  route('GET', /^\/api\/works$/, ({ req }) => {
-    const u = requireUser(req);
-    return visibleWorks(u).map((w) => summary(u, w));
+  route('GET', /^\/api\/works$/, async ({ req }) => {
+    const u = await requireUser(req);
+    return Promise.all((await store.worksVisibleTo(u)).map((w): Promise<WorkSummary> => summary(store, u, w)));
   });
 
-  route('GET', /^\/api\/activity$/, ({ req }): Activity[] => {
-    const u = requireUser(req);
-    return (db.prepare(
-      `SELECT e.time, e.text, w.title FROM events e JOIN works w ON w.id = e.work_id WHERE ${VISIBLE} ORDER BY e.id DESC LIMIT 12`,
-    ).all({ uid: u.id, email: u.email }) as Row[]).map((e) => ({ work: e.title, time: e.time, text: e.text }));
+  route('GET', /^\/api\/activity$/, async ({ req }): Promise<Activity[]> => {
+    const u = await requireUser(req);
+    return (await store.activityVisibleTo(u, 12)).map((e) => ({ work: e.workTitle, time: e.time, text: e.text }));
   });
 
-  route('POST', /^\/api\/works$/, ({ req, body }) => {
-    const u = requireUser(req);
+  route('POST', /^\/api\/works$/, async ({ req, body }) => {
+    const u = await requireUser(req);
     const title = text(body.title, 'Title', 120, true);
     const album = text(body.album, 'Album', 120);
-    // Optionally start from the split of another of your songs, so an album can share one split.
-    let template: Row[] | null = null;
-    if (body.copyFrom !== undefined && body.copyFrom !== '') {
-      const source = visibleWork(u, text(body.copyFrom, 'Song to copy', 16));
-      if (!manages(u, source)) throw new HttpError(403, 'You can only copy the split of a song you created');
-      template = peopleOf(source.id);
-    }
     const id = randomBytes(8).toString('hex');
-    transaction(db, () => {
-      const now = Date.now();
-      db.prepare('INSERT INTO works (id, owner_id, created_by, song_code, title, album, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(id, u.id, u.id, newSongCode(), title, album, now, now);
-      writePeople(id, template ? template.map((p) => ({ ...personJson({ status: 'draft' }, p), artistId: p.artist_id, seconds: 0 } as unknown as RowIn))
-        : [ownRow(u)]);
-      db.prepare('UPDATE works SET split_version = 1 WHERE id = ?').run(id);
-      addEvent(id, 'CREATE', `${u.artist_name} created "${title}"${album ? ` on "${album}"` : ''}${template ? ', starting from the split of another song' : ''}`);
+    await store.transaction(async (tx) => {
+      // Optionally start from the split of another of your songs, so an album can share one split.
+      let template: PersonRecord[] | null = null;
+      if (body.copyFrom !== undefined && body.copyFrom !== '') {
+        const source = await visibleWork(tx, u, text(body.copyFrom, 'Song to copy', 16));
+        if (!manages(u, source)) throw new HttpError(403, 'You can only copy the split of a song you created');
+        template = await tx.peopleOf(source.id);
+      }
+      const rows = await resolveRows(tx, template ? template.map((p) => ({ artistName: p.artistName, legalName: p.legalName, role: p.role, writerShare: p.writerShare, masterShare: p.masterShare,
+        email: p.email, artistId: p.artistId, pro: p.pro, ipi: p.ipi, publisher: p.publisher, publisherIpi: p.publisherIpi, terms: p.terms, seconds: 0 })) : [ownRow(u)]);
+      const songCode = await newSongCode(tx);
+
+      await tx.createWork({ id, ownerId: u.id, createdBy: u.id, ownerStated: false, songCode, title, album, createdAt: Date.now() }, rows);
+      await tx.appendEvent(id, 'CREATE', `${u.artistName} created "${title}"${album ? ` on "${album}"` : ''}${template ? ', starting from the split of another song' : ''}`);
     });
     return fresh(u, id);
   });
 
-  route('PUT', /^\/api\/works\/([0-9a-f]{16})$/, ({ req, body, params }) => {
-    const u = requireUser(req);
-    const w = visibleWork(u, params[0]);
-    if (!manages(u, w)) throw new HttpError(403, 'Only the owner, or the person who started this song, can change its details');
-    const title = text(body.title, 'Title', 120, true), album = text(body.album, 'Album', 120);
-    const isrc = body.isrc === undefined ? w.isrc : text(body.isrc, 'ISRC', 20), iswc = body.iswc === undefined ? w.iswc : text(body.iswc, 'ISWC', 20);
-    if (title !== w.title || album !== w.album || isrc !== w.isrc || iswc !== w.iswc) {
-      db.prepare('UPDATE works SET title = ?, album = ?, isrc = ?, iswc = ? WHERE id = ?').run(title, album, isrc, iswc, w.id);
-      addEvent(w.id, 'FILE', `${u.artist_name} filed this as "${title}"${album ? ` on "${album}"` : ' (single)'}${isrc ? `, ISRC ${isrc}` : ''}${iswc ? `, ISWC ${iswc}` : ''}`);
-    }
-    return fresh(u, w.id);
+  route('PUT', /^\/api\/works\/([0-9a-f]{16})$/, async ({ req, body, params }) => {
+    const u = await requireUser(req);
+    await store.transaction(async (tx) => {
+      const w = await visibleWork(tx, u, params[0]);
+      if (!manages(u, w)) throw new HttpError(403, 'Only the owner, or the person who started this song, can change its details');
+      const title = text(body.title, 'Title', 120, true), album = text(body.album, 'Album', 120);
+      const isrc = body.isrc === undefined ? w.isrc : text(body.isrc, 'ISRC', 20), iswc = body.iswc === undefined ? w.iswc : text(body.iswc, 'ISWC', 20);
+      if (title !== w.title || album !== w.album || isrc !== w.isrc || iswc !== w.iswc) {
+        await tx.updateWorkDetails(w.id, { title, album, isrc, iswc });
+        await tx.appendEvent(w.id, 'FILE', `${u.artistName} filed this as "${title}"${album ? ` on "${album}"` : ' (single)'}${isrc ? `, ISRC ${isrc}` : ''}${iswc ? `, ISWC ${iswc}` : ''}`);
+      }
+    });
+    return fresh(u, params[0]);
   });
 
   /** Says who owns the song. Until this is done nobody else's project can join it. */
-  route('POST', /^\/api\/works\/([0-9a-f]{16})\/owner$/, ({ req, body, params }) => {
-    const u = requireUser(req);
-    const w = visibleWork(u, params[0]);
-    setOwner(u, w, text(body.artistId, 'Artist ID', 20, true));
+  route('POST', /^\/api\/works\/([0-9a-f]{16})\/owner$/, async ({ req, body, params }) => {
+    const u = await requireUser(req);
+    await store.transaction(async (tx) => {
+      const w = await visibleWork(tx, u, params[0]);
+      const owner = await ownerToSet(tx, u, w, text(body.artistId, 'Artist ID', 20, true));
+      if (owner) await writeOwner(tx, u, w, owner);
+    });
     // Someone who hands a song on, and is not otherwise part of it, can no longer open it.
-    try { return fresh(u, w.id); } catch { return { handedOver: true }; }
+    try { return await fresh(u, params[0]); } catch { return { handedOver: true }; }
   });
 
-  route('DELETE', /^\/api\/works\/([0-9a-f]{16})$/, ({ req, body, params }) => {
-    const u = requireUser(req);
-    const w = visibleWork(u, params[0]);
-    if (w.owner_id !== u.id) throw new HttpError(403, 'Only the owner can delete a song');
-    if (w.status === 'signed') throw new HttpError(409, 'A signed split sheet is a record other people rely on, so it cannot be deleted');
-    if (text(body.confirmTitle, 'Title', 120) !== w.title) throw new HttpError(400, 'Type the song title exactly to confirm');
-    db.prepare('DELETE FROM works WHERE id = ?').run(w.id);
+  route('DELETE', /^\/api\/works\/([0-9a-f]{16})$/, async ({ req, body, params }) => {
+    const u = await requireUser(req);
+    await store.transaction(async (tx) => {
+      const w = await visibleWork(tx, u, params[0]);
+      if (w.ownerId !== u.id) throw new HttpError(403, 'Only the owner can delete a song');
+      if (w.status === 'signed') throw new HttpError(409, 'A signed split sheet is a record other people rely on, so it cannot be deleted');
+      if (text(body.confirmTitle, 'Title', 120) !== w.title) throw new HttpError(400, 'Type the song title exactly to confirm');
+      await tx.deleteWork(w.id);
+    });
     return { ok: true };
   });
 
-  route('GET', /^\/api\/works\/([0-9a-f]{16})$/, ({ req, params }) => fresh(requireUser(req), params[0]));
+  route('GET', /^\/api\/works\/([0-9a-f]{16})$/, async ({ req, params }) => fresh(await requireUser(req), params[0]));
 
-  route('PUT', /^\/api\/works\/([0-9a-f]{16})\/people$/, ({ req, body, params }) => {
-    const u = requireUser(req);
-    const w = visibleWork(u, params[0]);
-    if (!manages(u, w)) throw new HttpError(403, 'Only the owner, or the person who started this song, can change the split');
-    if (w.status === 'signed') throw new HttpError(409, 'This split sheet is signed and can no longer be changed');
-    if (!Array.isArray(body.people) || body.people.length === 0 || body.people.length > 50) throw new HttpError(400, 'A split sheet needs between 1 and 50 people');
-    const rows = (body.people as Row[]).map(rowIn);
-    transaction(db, () => {
-      writePeople(w.id, rows);
-      addEvent(w.id, 'SPLIT', `${u.artist_name} set the split (writer/master): ${describeSplit(rows)}`);
+  route('PUT', /^\/api\/works\/([0-9a-f]{16})\/people$/, async ({ req, body, params }) => {
+    const u = await requireUser(req);
+    await store.transaction(async (tx) => {
+      const w = await visibleWork(tx, u, params[0]);
+      if (!manages(u, w)) throw new HttpError(403, 'Only the owner, or the person who started this song, can change the split');
+      if (w.status === 'signed') throw new HttpError(409, 'This split sheet is signed and can no longer be changed');
+      if (!Array.isArray(body.people) || body.people.length === 0 || body.people.length > 50) throw new HttpError(400, 'A split sheet needs between 1 and 50 people');
+      const rows = (body.people as Json[]).map(rowIn);
+      const resolved = await resolveRows(tx, rows);
+
+      await tx.writePeople(w.id, resolved);
+      await tx.appendEvent(w.id, 'SPLIT', `${u.artistName} set the split (writer/master): ${describeSplit(rows)}`);
     });
-    return fresh(u, w.id);
+    return fresh(u, params[0]);
   });
 
-  route('POST', /^\/api\/works\/([0-9a-f]{16})\/send$/, ({ req, params }) => {
-    const u = requireUser(req);
-    const w = visibleWork(u, params[0]);
-    if (!manages(u, w)) throw new HttpError(403, 'Only the owner, or the person who started this song, can send it for approval');
-    if (w.status !== 'draft') throw new HttpError(409, w.status === 'signed' ? 'This split sheet is already signed' : 'This split sheet has already been sent');
-    const rowsNow = detail(u, w).rows;
-    const problem = sendProblem(rowsNow);
-    if (problem) throw new HttpError(400, problem);
-    // Everyone who has to approve must have an account, so the sheet has somewhere to go.
-    const stranger = rowsNow.find((r) => hasShare(r) && !r.hasAccount);
-    if (stranger) throw new HttpError(400, `${stranger.artistName} has not signed up yet. They need an account before this can be sent.`);
-
-    transaction(db, () => {
-      db.prepare("UPDATE works SET status = 'sent', shared = 1 WHERE id = ?").run(w.id);
+  route('POST', /^\/api\/works\/([0-9a-f]{16})\/send$/, async ({ req, params }) => {
+    const u = await requireUser(req);
+    await store.transaction(async (tx) => {
+      const w = await visibleWork(tx, u, params[0]);
+      if (!manages(u, w)) throw new HttpError(403, 'Only the owner, or the person who started this song, can send it for approval');
+      if (w.status !== 'draft') throw new HttpError(409, w.status === 'signed' ? 'This split sheet is already signed' : 'This split sheet has already been sent');
+      const people = await tx.peopleOf(w.id);
+      const rowsNow = await sheetRows(tx, w.status, people);
+      const problem = sendProblem(rowsNow);
+      if (problem) throw new HttpError(400, problem);
+      // Everyone who has to approve must have an account, so the sheet has somewhere to go.
+      const stranger = rowsNow.find((r) => hasShare(r) && !r.hasAccount);
+      if (stranger) throw new HttpError(400, `${stranger.artistName} has not signed up yet. They need an account before this can be sent.`);
       // Sending is the owner's own approval.
-      db.prepare("UPDATE people SET decision = 'approved', decided_at = ? WHERE work_id = ? AND email = ?").run(Date.now(), w.id, u.email);
-      addEvent(w.id, 'SEND', `${u.artist_name} sent the split sheet for approval`);
-      signIfComplete(w.id);
+      const own = people.filter((p) => p.email === u.email).map((p) => p.id);
+
+      await tx.markSent(w.id);
+      await tx.setDecisions(w.id, own, 'approved', Date.now());
+      await tx.appendEvent(w.id, 'SEND', `${u.artistName} sent the split sheet for approval`);
+      if (completes(people, own, 'approved')) await sign(tx, w.id);
     });
-    return fresh(u, w.id);
+    return fresh(u, params[0]);
   });
 
-  route('POST', /^\/api\/works\/([0-9a-f]{16})\/decision$/, ({ req, body, params }) => {
-    const u = requireUser(req);
-    const w = visibleWork(u, params[0]);
-    const decision = body.decision;
-    if (decision !== 'approved' && decision !== 'declined') throw new HttpError(400, 'Choose approve or decline');
-    if (w.status !== 'sent') throw new HttpError(409, w.status === 'signed' ? 'This split sheet is already signed' : 'This split sheet has not been sent for approval yet');
-    const mine = db.prepare('SELECT * FROM people WHERE work_id = ? AND email = ?').get(w.id, u.email) as Row | undefined;
-    if (!mine) throw new HttpError(403, 'You are not on this split sheet');
+  route('POST', /^\/api\/works\/([0-9a-f]{16})\/decision$/, async ({ req, body, params }) => {
+    const u = await requireUser(req);
+    await store.transaction(async (tx) => {
+      const w = await visibleWork(tx, u, params[0]);
+      const decision = body.decision;
+      if (decision !== 'approved' && decision !== 'declined') throw new HttpError(400, 'Choose approve or decline');
+      if (w.status !== 'sent') throw new HttpError(409, w.status === 'signed' ? 'This split sheet is already signed' : 'This split sheet has not been sent for approval yet');
+      const people = await tx.peopleOf(w.id);
+      const mine = people.find((p) => p.email === u.email);
+      if (!mine) throw new HttpError(403, 'You are not on this split sheet');
 
-    transaction(db, () => {
-      db.prepare('UPDATE people SET decision = ?, decided_at = ? WHERE id = ?').run(decision, Date.now(), mine.id);
-      addEvent(w.id, decision === 'approved' ? 'APPROVE' : 'DECLINE',
-        `${u.artist_name} (${u.legal_name}) ${decision} the split: writer ${mine.writer_share}%, master ${mine.master_share}%`);
-      signIfComplete(w.id);
+      await tx.setDecisions(w.id, [mine.id], decision, Date.now());
+      await tx.appendEvent(w.id, decision === 'approved' ? 'APPROVE' : 'DECLINE',
+        `${u.artistName} (${u.legalName}) ${decision} the split: writer ${mine.writerShare}%, master ${mine.masterShare}%`);
+      if (completes(people, [mine.id], decision)) await sign(tx, w.id);
     });
-    return fresh(u, w.id);
+    return fresh(u, params[0]);
   });
 
-  route('POST', /^\/api\/works\/([0-9a-f]{16})\/messages$/, ({ req, body, params }) => {
-    const u = requireUser(req);
-    const w = visibleWork(u, params[0]);
-    const message = text(body.body, 'Message', 2000, true);
-    db.prepare('INSERT INTO messages (work_id, user_id, body, created_at) VALUES (?, ?, ?, ?)').run(w.id, u.id, message, Date.now());
-    db.prepare('UPDATE works SET updated_at = ? WHERE id = ?').run(Date.now(), w.id);
-    return fresh(u, w.id);
+  route('POST', /^\/api\/works\/([0-9a-f]{16})\/messages$/, async ({ req, body, params }) => {
+    const u = await requireUser(req);
+    await store.transaction(async (tx) => {
+      const w = await visibleWork(tx, u, params[0]);
+      const message = text(body.body, 'Message', 2000, true);
+      await tx.addMessage(w.id, u.id, message, Date.now());
+    });
+    return fresh(u, params[0]);
   });
 
 
   // ---------- plugin link ----------
 
-  const keyJson = (k: Row): PluginKey => ({ id: k.id, name: k.name, key: k.token, createdAt: k.created_at, lastUsedAt: k.last_used_at ?? null });
-  const keysOf = (userId: number): PluginKey[] =>
-    (db.prepare('SELECT * FROM plugin_keys WHERE user_id = ? ORDER BY id').all(userId) as Row[]).map(keyJson);
+  const keysOf = async (s: StoreTx, userId: number): Promise<PluginKey[]> =>
+    (await s.pluginKeysOf(userId)).map((k) => ({ id: k.id, name: k.name, key: k.token, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt }));
 
-  route('GET', /^\/api\/keys$/, ({ req }) => keysOf(requireUser(req).id));
+  route('GET', /^\/api\/keys$/, async ({ req }) => keysOf(store, (await requireUser(req)).id));
 
-  route('POST', /^\/api\/keys$/, ({ req, body }) => {
-    const u = requireUser(req);
+  route('POST', /^\/api\/keys$/, async ({ req, body }) => {
+    const u = await requireUser(req);
     const name = text(body.name, 'Name', 60) || 'My computer';
-    if (keysOf(u.id).length >= 20) throw new HttpError(400, 'Remove an old key before adding another');
     const key = `stk_${randomBytes(32).toString('base64url')}`;
-    db.prepare('INSERT INTO plugin_keys (user_id, name, token, token_hash, created_at) VALUES (?, ?, ?, ?, ?)').run(u.id, name, key, sha256(key), Date.now());
-    return { key, keys: keysOf(u.id) };
+    await store.transaction(async (tx) => {
+      if ((await tx.pluginKeysOf(u.id)).length >= 20) throw new HttpError(400, 'Remove an old key before adding another');
+      await tx.createPluginKey(u.id, name, key, sha256(key), Date.now());
+    });
+    return { key, keys: await keysOf(store, u.id) };
   });
 
-  route('DELETE', /^\/api\/keys\/(\d+)$/, ({ req, params }) => {
-    const u = requireUser(req);
-    db.prepare('DELETE FROM plugin_keys WHERE id = ? AND user_id = ?').run(Number(params[0]), u.id);
-    return keysOf(u.id);
+  route('DELETE', /^\/api\/keys\/(\d+)$/, async ({ req, params }) => {
+    const u = await requireUser(req);
+    await store.deletePluginKey(u.id, Number(params[0]));
+    return keysOf(store, u.id);
   });
 
-  function requireKeyUser(req: IncomingMessage): Row {
+  async function requireKeyUser(req: IncomingMessage): Promise<UserRecord> {
     const m = /^Bearer (stk_[A-Za-z0-9_-]{20,})$/.exec(req.headers.authorization ?? '');
-    const row = m ? db.prepare(
-      'SELECT u.*, k.id AS key_id FROM plugin_keys k JOIN users u ON u.id = k.user_id WHERE k.token_hash = ?',
-    ).get(sha256(m[1])) as Row | undefined : undefined;
-    if (!row) throw new HttpError(401, 'This plugin key is not valid. Create a new one on your Profile page.');
-    db.prepare('UPDATE plugin_keys SET last_used_at = ? WHERE id = ?').run(Date.now(), row.key_id);
-    return row;
+    const found = m ? await store.userByPluginKey(sha256(m[1])) : null;
+    if (!found) throw new HttpError(401, 'This plugin key is not valid. Create a new one on your Profile page.');
+    await store.touchPluginKey(found.keyId, Date.now());
+    return found.user;
   }
 
   /** Which account this computer's plugin is linked to, so the plugin can show it. */
-  route('GET', /^\/api\/plugin\/whoami$/, ({ req }) => {
-    const u = requireKeyUser(req);
-    return { artistName: u.artist_name, legalName: u.legal_name, email: u.email, artistId: u.artist_id };
+  route('GET', /^\/api\/plugin\/whoami$/, async ({ req }) => {
+    const u = await requireKeyUser(req);
+    return { artistName: u.artistName, legalName: u.legalName, email: u.email, artistId: u.artistId };
   }, { auth: 'key' });
 
   /** The plugin looks up the person being added to a split sheet by their Artist ID. */
-  route('GET', /^\/api\/plugin\/artists\/([^/]{1,40})$/, ({ req, params }) => {
-    requireKeyUser(req);
+  route('GET', /^\/api\/plugin\/artists\/([^/]{1,40})$/, async ({ req, params }) => {
+    await requireKeyUser(req);
     return artistCard(decodeURIComponent(params[0]));
   }, { auth: 'key' });
 
-  route('GET', /^\/api\/artists\/([^/]{1,40})$/, ({ req, params }) => {
-    requireUser(req);
+  route('GET', /^\/api\/artists\/([^/]{1,40})$/, async ({ req, params }) => {
+    await requireUser(req);
     return artistCard(decodeURIComponent(params[0]));
   });
 
   const num = (v: unknown, max = 1e15): number => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? Math.min(n, max) : 0; };
   const hex64 = (v: unknown): string => (typeof v === 'string' && /^[0-9a-f]{64}$/.test(v) ? v : '');
-  const list = (v: unknown, max: number): Row[] => (Array.isArray(v) ? v.slice(0, max).filter((x) => x && typeof x === 'object') : []);
+  const list = (v: unknown, max: number): Json[] => (Array.isArray(v) ? v.slice(0, max).filter((x) => x && typeof x === 'object') : []);
   const short = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
   /** Recomputes the plugin's log chain exactly as the plugin does. */
-  function pluginLogIntact(projectId: string, log: Row): { ok: boolean; head: string; entries: number } {
+  function pluginLogIntact(projectId: string, log: Json): { ok: boolean; head: string; entries: number } {
     const entries = list(log?.entries, 6000);
     let prev = hex64(log?.baseHash) || sha256(`GENESIS|${projectId}`);
     let ok = true;
@@ -539,27 +522,27 @@ export function createApp(db: Db, options: AppOptions = {}) {
 
   // ---------- sources: the separate projects that feed one song ----------
 
-  const sourceRows = (workId: string): Row[] => db.prepare(
-    `SELECT s.*, u.artist_name FROM sources s JOIN users u ON u.id = s.user_id WHERE s.work_id = ? ORDER BY s.linked_at`,
-  ).all(workId) as Row[];
+  /** A project feeding a song, with its evidence. */
+  interface Loaded { r: SourceRecord; ev: Evidence }
 
-  function sourceList(w: Row): SourceInfo[] {
-    return sourceRows(w.id).map((r) => {
-      const ev = JSON.parse(r.data) as Evidence;
-      return { artistName: r.via ? r.via : r.artist_name, isOwner: !r.via && r.user_id === w.owner_id, receiptUploadedBy: r.via ? r.artist_name : undefined, syncedAt: r.synced_at, logIntact: !!r.chain_ok,
-        logEntries: ev.logEntries ?? 0, tracks: ev.tracks?.length ?? 0, takes: ev.takes?.length ?? 0, bounces: ev.bounces?.length ?? 0 };
-    });
+  /** Every project feeding a song, each with the evidence it uploaded. */
+  async function loadSources(s: StoreTx, workId: string): Promise<Loaded[]> {
+    return Promise.all((await s.sourcesOfWork(workId)).map(async (r): Promise<Loaded> => ({ r, ev: (await s.getSourceEvidence(r.userId, r.projectId) ?? {}) as Evidence })));
+  }
+
+  function sourceList(w: WorkRecord, all: Loaded[]): SourceInfo[] {
+    return all.map(({ r, ev }) => ({
+      artistName: r.via ? r.via : r.uploaderName, isOwner: !r.via && r.userId === w.ownerId, receiptUploadedBy: r.via ? r.uploaderName : undefined, syncedAt: r.syncedAt, logIntact: r.chainOk,
+      logEntries: ev.logEntries ?? 0, tracks: ev.tracks?.length ?? 0, takes: ev.takes?.length ?? 0, bounces: ev.bounces?.length ?? 0,
+    }));
   }
 
   /** Every project's record for a song, side by side. Nothing from one project replaces another's:
       each track, take and bounce is labelled with whose project it came from. */
-  function evidenceOf(workId: string): Evidence | null {
-    const rows = sourceRows(workId);
-    if (rows.length === 0) return null;
-    const w = db.prepare('SELECT owner_id FROM works WHERE id = ?').get(workId) as Row;
-    const all = rows.map((r) => ({ r, ev: JSON.parse(r.data) as Evidence }));
-    const lead = all.find((x) => x.r.user_id === w.owner_id) ?? all[0];
-    const label = (x: { r: Row }) => (x.r.via ? `${x.r.via}'s offline receipt` : rows.length > 1 ? x.r.artist_name as string : undefined);
+  function evidenceOf(ownerId: number, all: Loaded[]): Evidence | null {
+    if (all.length === 0) return null;
+    const lead = all.find((x) => x.r.userId === ownerId) ?? all[0];
+    const label = (x: Loaded) => (x.r.via ? `${x.r.via}'s offline receipt` : all.length > 1 ? x.r.uploaderName : undefined);
     return {
       syncedAt: Math.max(...all.map((x) => x.ev.syncedAt)),
       logIntact: all.every((x) => x.ev.logIntact),
@@ -577,45 +560,54 @@ export function createApp(db: Db, options: AppOptions = {}) {
     };
   }
 
-  const ownRow = (u: Row): RowIn => ({ artistName: u.artist_name, legalName: u.legal_name, role: u.role, writerShare: 100, masterShare: 100, email: u.email,
-    artistId: u.artist_id, pro: u.pro, ipi: u.ipi, publisher: u.publisher, publisherIpi: u.publisher_ipi, terms: '', seconds: 0 });
+  /** A song's combined evidence, read from the store. */
+  const evidenceOfWork = async (s: StoreTx, w: WorkRecord): Promise<Evidence | null> => evidenceOf(w.ownerId, await loadSources(s, w.id));
 
-  /** States the owner. The current owner may hand the song on; the person who started it may name the
-      owner while nobody has yet. The owner must have an account. */
-  function setOwner(u: Row, w: Row, rawId: string): void {
+  const ownRow = (u: UserRecord): RowIn => ({ artistName: u.artistName, legalName: u.legalName, role: u.role, writerShare: 100, masterShare: 100, email: u.email,
+    artistId: u.artistId, pro: u.pro, ipi: u.ipi, publisher: u.publisher, publisherIpi: u.publisherIpi, terms: '', seconds: 0 });
+
+  /** Checks a statement of who owns the song. The current owner may hand the song on; the person who
+      started it may name the owner while nobody has yet. The owner must have an account. Reads only:
+      returns the account to set as owner, or null when it already is. */
+  async function ownerToSet(s: StoreTx, u: UserRecord, w: WorkRecord, rawId: string): Promise<UserRecord | null> {
     const id = normaliseArtistId(rawId);
     if (!id) throw new HttpError(400, "That is not an Artist ID. The owner's ID looks like ST-7K2Q-9FXM.");
-    const owner = db.prepare('SELECT * FROM users WHERE artist_id = ?').get(id) as Row | undefined;
+    const owner = await s.userByArtistId(id);
     if (!owner) throw new HttpError(404, 'No account has that Artist ID. The owner needs to sign up first.');
-    const allowed = w.owner_id === u.id || (w.created_by === u.id && !w.owner_stated);
-    if (!allowed) throw new HttpError(403, w.owner_stated ? 'Only the current owner can hand this song to someone else' : 'Only the person who started this song can name its owner');
-    if (w.status === 'signed' && owner.id !== w.owner_id) throw new HttpError(409, 'A signed song cannot change owner');
-    if (owner.id === w.owner_id && w.owner_stated) return;
-    db.prepare('UPDATE works SET owner_id = ?, owner_stated = 1 WHERE id = ?').run(owner.id, w.id);
-    addEvent(w.id, 'OWNER', `${u.artist_name} stated that ${owner.artist_name} (${owner.legal_name}) owns this song`);
-    w.owner_id = owner.id; w.owner_stated = 1;
+    const allowed = w.ownerId === u.id || (w.createdBy === u.id && !w.ownerStated);
+    if (!allowed) throw new HttpError(403, w.ownerStated ? 'Only the current owner can hand this song to someone else' : 'Only the person who started this song can name its owner');
+    if (w.status === 'signed' && owner.id !== w.ownerId) throw new HttpError(409, 'A signed song cannot change owner');
+    if (owner.id === w.ownerId && w.ownerStated) return null;
+    return owner;
+  }
+
+  /** Writes the owner that `ownerToSet` returned. */
+  async function writeOwner(tx: StoreTx, u: UserRecord, w: WorkRecord, owner: UserRecord): Promise<void> {
+    await tx.setWorkOwner(w.id, owner.id);
+    await tx.appendEvent(w.id, 'OWNER', `${u.artistName} stated that ${owner.artistName} (${owner.legalName}) owns this song`);
   }
 
   /** The plugin holds no emails. Rows keep the email already entered here for the same person, and the
       person syncing is recognised by name; a row with an Artist ID is tied to that account instead. */
-  function withEmails(contributors: RowIn[], before: Row[], u: Row): RowIn[] {
-    const emails = new Map(before.filter((p) => p.email).map((p) => [String(p.artist_name).toLowerCase(), p.email as string]));
-    const mine = [u.artist_name, u.legal_name].map((n: string) => n.toLowerCase());
+  function withEmails(contributors: RowIn[], before: PersonRecord[], u: UserRecord): RowIn[] {
+    const emails = new Map(before.filter((p) => p.email).map((p) => [p.artistName.toLowerCase(), p.email]));
+    const mine = [u.artistName, u.legalName].map((n) => n.toLowerCase());
     return contributors.map((c) => ({ ...c, email: c.artistId ? '' : emails.get(c.artistName.toLowerCase())
       ?? (mine.includes(c.artistName.toLowerCase()) || (c.legalName && mine.includes(c.legalName.toLowerCase())) ? u.email : '') }));
   }
 
   /** What the plugin gets back, so it can show and load the website's side of the song. */
-  function siteState(u: Row, w: Row, conflict: boolean) {
-    const owner = db.prepare('SELECT artist_name, artist_id FROM users WHERE id = ?').get(w.owner_id) as Row;
+  async function siteState(s: StoreTx, u: UserRecord, w: WorkRecord, conflict: boolean) {
+    const [found, sources, people] = await Promise.all([s.userById(w.ownerId), s.sourcesOfWork(w.id), s.peopleOf(w.id)]);
+    const owner = found!;
     return {
-      songCode: w.song_code, title: w.title, album: w.album, isrc: w.isrc, iswc: w.iswc, status: w.status,
-      ownerName: owner.artist_name, ownerArtistId: owner.artist_id, ownerStated: !!w.owner_stated,
-      youManage: manages(u, w), splitVersion: w.split_version, conflict,
-      projects: sourceRows(w.id).length,
-      rows: peopleOf(w.id).map((p) => ({ artistId: p.artist_id, artistName: p.artist_name, legalName: p.legal_name, role: p.role, writerShare: p.writer_share,
-        masterShare: p.master_share, pro: p.pro, ipi: p.ipi, publisher: p.publisher, publisherIpi: p.publisher_ipi, terms: p.terms,
-        status: personStatus(w.status, p.decision as Decision, shareOf(p)) })),
+      songCode: w.songCode, title: w.title, album: w.album, isrc: w.isrc, iswc: w.iswc, status: w.status,
+      ownerName: owner.artistName, ownerArtistId: owner.artistId, ownerStated: w.ownerStated,
+      youManage: manages(u, w), splitVersion: w.splitVersion, conflict,
+      projects: sources.length,
+      rows: people.map((p) => ({ artistId: p.artistId, artistName: p.artistName, legalName: p.legalName, role: p.role, writerShare: p.writerShare,
+        masterShare: p.masterShare, pro: p.pro, ipi: p.ipi, publisher: p.publisher, publisherIpi: p.publisherIpi, terms: p.terms,
+        status: personStatus(w.status, p.decision, shareOf(p)) })),
     };
   }
 
@@ -634,15 +626,15 @@ export function createApp(db: Db, options: AppOptions = {}) {
     /** The project is being added to an existing song, so it must not rename it. */
     keepDetails?: boolean;
   }
-  function syncProject(u: Row, body: Row, opts: SyncOptions = {}) {
+  async function syncProject(u: UserRecord, body: Json, opts: SyncOptions = {}) {
     const via = opts.receipt?.madeBy ?? '';
-    const actor = opts.receipt ? `An offline receipt from ${via}, uploaded by ${u.artist_name},` : `${u.artist_name}'s plugin`;
+    const actor = opts.receipt ? `An offline receipt from ${via}, uploaded by ${u.artistName},` : `${u.artistName}'s plugin`;
     const projectId = short(body.projectId, 80);
     if (!/^[A-Za-z0-9_-]{8,80}$/.test(projectId)) throw new HttpError(400, 'This project has no valid project id');
     const title = short(body.title, 120);
     const ownerId = short(body.ownerArtistId, 20), songCode = short(body.songCode, 20);
 
-    const chain = pluginLogIntact(projectId, body.log as Row);
+    const chain = pluginLogIntact(projectId, body.log as Json);
     const evidence: Evidence = {
       syncedAt: Date.now(), logIntact: chain.ok, logEntries: chain.entries, chainHead: chain.head,
       splitsLocked: body.splitsConfirmed === true,
@@ -653,13 +645,13 @@ export function createApp(db: Db, options: AppOptions = {}) {
         num: num(b.num, 1e6), time: num(b.time), durationSecs: num(b.durationSecs), fpId: hex64(b.fpId), fileSha: hex64(b.fileSha), fileName: short(b.fileName, 200),
         stems: list(b.stems, 200).map((st) => ({ trackName: short(st.trackName, 120), person: short(st.person, 80), fpId: hex64(st.fpId) })),
       })),
-      project: body.project && typeof body.project === 'object' && hex64((body.project as Row).sha)
-        ? { fileName: short((body.project as Row).fileName, 200), sha: hex64((body.project as Row).sha), daw: short((body.project as Row).daw, 40), time: num((body.project as Row).time) } : null,
+      project: body.project && typeof body.project === 'object' && hex64((body.project as Json).sha)
+        ? { fileName: short((body.project as Json).fileName, 200), sha: hex64((body.project as Json).sha), daw: short((body.project as Json).daw, 40), time: num((body.project as Json).time) } : null,
       projects: [],
       computers: list(body.machines, 50).map((m) => ({ name: short(m.name, 80), os: short(m.os, 60), firstSeen: num(m.firstSeen), lastSeen: num(m.lastSeen), opens: num(m.opens, 1e6) })),
     };
     // Every signature the log holds, so an older saved version of the project can still be recognised.
-    for (const e of list((body.log as Row)?.entries, 6000)) {
+    for (const e of list((body.log as Json)?.entries, 6000)) {
       if (e.type !== 'PROJECT' || typeof e.text !== 'string') continue;
       const m = /(?:Signed project file |as last saved: )(.+?)(?: \(([^()]+)\))?: SHA-256 ([0-9a-f]{64})/.exec(e.text);
       if (m) evidence.projects.push({ fileName: m[1].slice(0, 200), daw: m[2] ?? '', sha: m[3], time: num(e.time) });
@@ -671,131 +663,153 @@ export function createApp(db: Db, options: AppOptions = {}) {
       pro: short(c.pro, 60), ipi: short(c.ipi, 40), publisher: short(c.publisher, 120), publisherIpi: short(c.publisherIpi, 40),
       terms: short(c.terms, 300), seconds: Math.round(num(c.seconds)),
     }));
+    const lines: LogLine[] = list((body.log as Json)?.entries, 6000).map((e) => ({ time: num(e.time), type: short(e.type, 40), text: short(e.text, 2000) }));
 
-    let conflict = false, created = false;
-    let w!: Row;
-    transaction(db, () => {
+    const done = await store.transaction(async (tx) => {
       const now = Date.now();
-      const source = db.prepare('SELECT * FROM sources WHERE user_id = ? AND project_id = ?').get(u.id, projectId) as Row | undefined;
-      let fresh = false;
+
+      // ----- Reads and checks. Nothing is written until every one of them has passed. -----
+
+      const source = await tx.findSource(u.id, projectId);
+      let w: WorkRecord;
+      let joined = false, created = false;
+      let newOwner: UserRecord | null = null;     // for a new song: the owner its details name
+      let newPeople: PersonInput[] = [];           // for a new song: its first split sheet
 
       if (source) {
-        w = db.prepare('SELECT * FROM works WHERE id = ?').get(source.work_id) as Row;
+        w = (await tx.workById(source.workId))!;
         // A receipt saved before the latest sync would put older records over newer ones.
-        if (opts.receipt && chain.entries < ((JSON.parse(source.data) as Evidence).logEntries ?? 0))
+        if (opts.receipt && chain.entries < ((await tx.getSourceEvidence(u.id, projectId))?.logEntries ?? 0))
           throw new HttpError(409, `The website already has a newer record of this project (in "${w.title}"). This receipt is older, so nothing was changed.`);
       } else if (songCode) {
         // A separate project joining an existing song.
         const code = normaliseSongCode(songCode);
         if (!code) throw new HttpError(400, 'That is not a song code. It looks like SG-4MPT-2K7H and is on the song\'s page on the website.');
-        w = db.prepare('SELECT * FROM works WHERE song_code = ?').get(code) as Row;
-        if (!w) throw new HttpError(404, 'No song has that code');
+        const found = await tx.workBySongCode(code);
+        if (!found) throw new HttpError(404, 'No song has that code');
+        w = found;
         if (!manages(u, w)) {
-          const owner = db.prepare('SELECT artist_name, artist_id FROM users WHERE id = ?').get(w.owner_id) as Row;
-          if (!w.owner_stated) throw new HttpError(409, 'The owner of this song has not been set yet. The person who started it sets the owner in Song details, or on the website, before anyone else can join.');
-          if (normaliseArtistId(ownerId) !== owner.artist_id) throw new HttpError(409, "To join this song, enter its owner's Artist ID in Song details. It must match the owner set for the song.");
-          const onSheet = db.prepare('SELECT 1 FROM people WHERE work_id = ? AND (email = ? OR artist_id = ?)').get(w.id, u.email, u.artist_id);
-          if (!onSheet) throw new HttpError(403, `You are not on this song's split sheet yet. Ask ${owner.artist_name} to add you with your Artist ID ${u.artist_id}.`);
+          const owner = (await tx.userById(w.ownerId))!;
+          if (!w.ownerStated) throw new HttpError(409, 'The owner of this song has not been set yet. The person who started it sets the owner in Song details, or on the website, before anyone else can join.');
+          if (normaliseArtistId(ownerId) !== owner.artistId) throw new HttpError(409, "To join this song, enter its owner's Artist ID in Song details. It must match the owner set for the song.");
+          if (!await tx.personOnSheet(w.id, u.email, u.artistId)) throw new HttpError(403, `You are not on this song's split sheet yet. Ask ${owner.artistName} to add you with your Artist ID ${u.artistId}.`);
         }
-        fresh = true;
-        addEvent(w.id, 'JOIN', opts.receipt ? `${actor} added a separate project to this song` : `${u.artist_name}'s project joined this song as a separate source`);
+        joined = true;
       } else {
         // A new song. The owner is whoever the song details name; if they name nobody, it is not yet stated.
-        let owner = u, stated = 0;
+        let owner = u, stated = false;
         if (ownerId) {
           const id = normaliseArtistId(ownerId);
           if (!id) throw new HttpError(400, "The owner's Artist ID in Song details is not valid. It looks like ST-7K2Q-9FXM.");
-          const named = db.prepare('SELECT * FROM users WHERE artist_id = ?').get(id) as Row | undefined;
+          const named = await tx.userByArtistId(id);
           if (!named) throw new HttpError(404, "No account has the owner's Artist ID. The owner needs to sign up first.");
-          owner = named; stated = 1;
+          owner = named; stated = true;
         }
-        const id = randomBytes(8).toString('hex');
-        db.prepare('INSERT INTO works (id, owner_id, created_by, owner_stated, song_code, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-          .run(id, owner.id, u.id, stated, newSongCode(), title || 'Untitled', now, now);
-        addEvent(id, 'CREATE', `${actor} created "${title || 'Untitled'}"${stated ? `, owned by ${owner.artist_name}` : ''}`);
-        writePeople(id, contributors.length > 0 ? withEmails(contributors, [], u) : [ownRow(owner)]);
-        db.prepare('UPDATE works SET split_version = 1 WHERE id = ?').run(id);
-        if (contributors.length > 0) addEvent(id, 'SPLIT', `Plugin set the split (writer/master): ${describeSplit(contributors)}`);
-        w = db.prepare('SELECT * FROM works WHERE id = ?').get(id) as Row;
-        fresh = true; created = true;
+        newOwner = owner;
+        newPeople = await resolveRows(tx, contributors.length > 0 ? withEmails(contributors, [], u) : [ownRow(owner)]);
+        w = { id: randomBytes(8).toString('hex'), ownerId: owner.id, createdBy: u.id, ownerStated: stated, songCode: await newSongCode(tx), title: title || 'Untitled', album: '',
+          status: 'draft', shared: false, isrc: '', iswc: '', splitVersion: 1, createdAt: now, updatedAt: now };
+        created = true;
       }
+      const fresh = joined || created;
 
-      if (!source)
-        db.prepare('INSERT INTO sources (user_id, project_id, work_id, linked_at, synced_at, via) VALUES (?, ?, ?, ?, ?, ?)').run(u.id, projectId, w.id, now, now, via);
-      if (!opts.receipt) {
-        // The project's own plugin is syncing now, so a receipt of the same project is no longer needed.
-        if (source?.via) db.prepare("UPDATE sources SET via = '' WHERE user_id = ? AND project_id = ?").run(u.id, projectId);
-        const replaced = db.prepare("DELETE FROM sources WHERE work_id = ? AND project_id = ? AND user_id != ? AND via != ''").run(w.id, projectId, u.id).changes;
-        if (replaced > 0) addEvent(w.id, 'RECEIPT', `${u.artist_name}'s plugin now syncs this project itself, so its earlier offline receipt was replaced by the live record`);
-      }
+      // Receipts of this same project that someone else uploaded to the song; its own plugin's sync replaces them.
+      const receipts = !opts.receipt && !created
+        ? (await tx.sourcesOfWork(w.id)).filter((s) => s.projectId === projectId && s.userId !== u.id && s.via !== '') : [];
 
       const manager = manages(u, w);
       // The owner named in the plugin's song details, from someone entitled to say.
+      let ownerChange: UserRecord | null = null;
       if (manager && ownerId && source) {
-        const allowed = w.owner_id === u.id || !w.owner_stated;
-        if (allowed) setOwner(u, w, ownerId);
+        const allowed = w.ownerId === u.id || !w.ownerStated;
+        if (allowed) ownerChange = await ownerToSet(tx, u, w, ownerId);
       }
+
+      let details: { title: string; isrc: string; iswc: string } | null = null;
       if (manager && !opts.keepDetails && !(fresh && !created)) {
         const isrc = short(body.isrc, 20), iswc = short(body.iswc, 20);
         const nextTitle = title && title !== 'Untitled' ? title : w.title;
         if (nextTitle !== w.title || (isrc && isrc !== w.isrc) || (iswc && iswc !== w.iswc))
-          db.prepare('UPDATE works SET title = ?, isrc = ?, iswc = ? WHERE id = ?').run(nextTitle, isrc || w.isrc, iswc || w.iswc, w.id);
+          details = { title: nextTitle, isrc: isrc || w.isrc, iswc: iswc || w.iswc };
       }
 
       // The split. A plugin that has not edited it since it last saw the website's version changes nothing.
-      const sp = (body.split && typeof body.split === 'object' ? body.split : null) as Row | null;
+      let conflict = false;
+      let split: PersonInput[] | null = null;
+      const sp = (body.split && typeof body.split === 'object' ? body.split : null) as Json | null;
       const dirty = sp ? sp.dirty === true : true;               // older plugins always send their split
-      const base = sp ? num(sp.baseVersion) : w.split_version;
+      const base = sp ? num(sp.baseVersion) : w.splitVersion;
       if (manager && (!fresh || (opts.receipt && !created)) && w.status === 'draft' && contributors.length > 0 && dirty) {
-        const before = peopleOf(w.id);
+        const before = await tx.peopleOf(w.id);
         const key = (r: { artistName: string; legalName: string; role: string; writerShare: number; masterShare: number; artistId: string; pro: string; ipi: string; publisher: string; publisherIpi: string; terms: string }) =>
           [r.artistName, r.legalName, r.role, r.writerShare, r.masterShare, r.artistId, r.pro, r.ipi, r.publisher, r.publisherIpi, r.terms].join('|');
         const same = before.length === contributors.length && before.every((p, i) => {
           const c = contributors[i];
           // A row the plugin holds without an Artist ID still equals the stored row for that person.
-          return key({ ...c, artistId: c.artistId || p.artist_id }) === key({ artistName: p.artist_name, legalName: p.legal_name, role: p.role, writerShare: p.writer_share,
-            masterShare: p.master_share, artistId: p.artist_id, pro: p.pro, ipi: p.ipi, publisher: p.publisher, publisherIpi: p.publisher_ipi, terms: p.terms });
+          return key({ ...c, artistId: c.artistId || p.artistId }) === key(p);
         });
         if (!same) {
-          if (base === w.split_version || sp?.force === true) {
-            writePeople(w.id, withEmails(contributors, before, u));
-            addEvent(w.id, 'SPLIT', `${actor} set the split (writer/master): ${describeSplit(contributors)}`);
-          } else {
-            conflict = true;   // changed on the website as well; the plugin decides which to keep
-          }
+          if (base === w.splitVersion || sp?.force === true) split = await resolveRows(tx, withEmails(contributors, before, u));
+          else conflict = true;   // changed on the website as well; the plugin decides which to keep
         }
       }
-      // Session time per person is a fact about the session, not a change to the agreement.
-      if (manager && contributors.length > 0)
-        for (const c of contributors) db.prepare('UPDATE people SET seconds = ? WHERE work_id = ? AND artist_name = ?').run(c.seconds, w.id, c.artistName);
 
-      const previous = db.prepare('SELECT chain_head, chain_ok FROM sources WHERE user_id = ? AND project_id = ?').get(u.id, projectId) as Row;
-      const lines: LogLine[] = list((body.log as Row)?.entries, 6000).map((e) => ({ time: num(e.time), type: short(e.type, 40), text: short(e.text, 2000) }));
-      db.prepare('UPDATE sources SET data = ?, log = ?, chain_ok = ?, chain_head = ?, synced_at = ? WHERE user_id = ? AND project_id = ?')
-        .run(JSON.stringify(evidence), JSON.stringify(lines), chain.ok ? 1 : 0, chain.head, evidence.syncedAt, u.id, projectId);
-      if (previous.chain_head !== chain.head || !!previous.chain_ok !== chain.ok) {
+      const chainChanged = (source?.chainHead ?? '') !== chain.head || (source?.chainOk ?? true) !== chain.ok;
+
+      // ----- Writes. -----
+
+      if (created) {
+        await tx.createWork({ id: w.id, ownerId: w.ownerId, createdBy: u.id, ownerStated: w.ownerStated, songCode: w.songCode, title: w.title, album: '', createdAt: now }, newPeople);
+        await tx.appendEvent(w.id, 'CREATE', `${actor} created "${title || 'Untitled'}"${w.ownerStated ? `, owned by ${newOwner!.artistName}` : ''}`);
+        if (contributors.length > 0) await tx.appendEvent(w.id, 'SPLIT', `Plugin set the split (writer/master): ${describeSplit(contributors)}`);
+      }
+      if (joined) await tx.appendEvent(w.id, 'JOIN', opts.receipt ? `${actor} added a separate project to this song` : `${u.artistName}'s project joined this song as a separate source`);
+
+      if (!source) await tx.addSource({ userId: u.id, projectId, workId: w.id, via, at: now });
+      if (!opts.receipt) {
+        // The project's own plugin is syncing now, so a receipt of the same project is no longer needed.
+        if (source?.via) await tx.setSourceVia(u.id, projectId, '');
+        for (const r of receipts) await tx.removeSource(r.userId, r.projectId);
+        if (receipts.length > 0) await tx.appendEvent(w.id, 'RECEIPT', `${u.artistName}'s plugin now syncs this project itself, so its earlier offline receipt was replaced by the live record`);
+      }
+
+      if (ownerChange) await writeOwner(tx, u, w, ownerChange);
+      if (details) await tx.updateWorkDetails(w.id, details);
+
+      if (split) {
+        await tx.writePeople(w.id, split);
+        await tx.appendEvent(w.id, 'SPLIT', `${actor} set the split (writer/master): ${describeSplit(contributors)}`);
+      }
+      // Session time per person is a fact about the session, not a change to the agreement.
+      if (manager && contributors.length > 0) await tx.setPeopleSeconds(w.id, contributors.map((c) => ({ artistName: c.artistName, seconds: c.seconds })));
+
+      await tx.putSourceRecord(u.id, projectId, { evidence, log: lines, chainOk: chain.ok, chainHead: chain.head, syncedAt: evidence.syncedAt });
+      if (chainChanged) {
         const stems = evidence.bounces.reduce((t, b) => t + b.stems.length, 0);
         const summaryText = `${evidence.takes.length} takes, ${evidence.bounces.length} bounces, ${stems} stems`;
-        db.prepare('INSERT INTO sync_history (work_id, user_id, project_id, synced_at, chain_head, chain_ok, summary) VALUES (?, ?, ?, ?, ?, ?, ?)')
-          .run(w.id, u.id, projectId, evidence.syncedAt, chain.head, chain.ok ? 1 : 0, summaryText);
-        addEvent(w.id, 'PLUGIN', `${actor} ${opts.receipt ? 'brought' : 'synced'}: ${summaryText}. Plugin log ${chain.ok ? 'intact' : 'ALTERED'}, head ${chain.head.slice(0, 16)}`);
+        await tx.addSyncHistory({ workId: w.id, userId: u.id, projectId, syncedAt: evidence.syncedAt, chainHead: chain.head, chainOk: chain.ok, summary: summaryText });
+        await tx.appendEvent(w.id, 'PLUGIN', `${actor} ${opts.receipt ? 'brought' : 'synced'}: ${summaryText}. Plugin log ${chain.ok ? 'intact' : 'ALTERED'}, head ${chain.head.slice(0, 16)}`);
       }
-      w = db.prepare('SELECT * FROM works WHERE id = ?').get(w.id) as Row;
+      return { workId: w.id, conflict, created };
     });
 
+    // The reply is read after the transaction, so it shows the song as it now stands.
+    const w = (await store.workById(done.workId))!;
     const wanted = new Set(evidence.bounces.flatMap((b) => [b.fpId, ...b.stems.map((st) => st.fpId)]).filter(Boolean));
-    for (const row of db.prepare('SELECT fp_id FROM fingerprints WHERE work_id = ?').all(w.id) as Row[]) wanted.delete(row.fp_id);
-    return { workId: w.id, title: w.title, created, logIntact: chain.ok, missingFingerprints: [...wanted],
-      account: { artistName: u.artist_name, artistId: u.artist_id }, site: siteState(u, w, conflict) };
+    const [stored, site] = await Promise.all([store.fingerprintsOf(w.id), siteState(store, u, w, done.conflict)]);
+    for (const f of stored) wanted.delete(f.fpId);
+    return { workId: w.id, title: w.title, created: done.created, logIntact: chain.ok, missingFingerprints: [...wanted],
+      account: { artistName: u.artistName, artistId: u.artistId }, site };
   }
 
-  route('POST', /^\/api\/plugin\/sync$/, ({ req, body }) => syncProject(requireKeyUser(req), body), { auth: 'key', maxBody: MAX_SYNC_BODY });
+  route('POST', /^\/api\/plugin\/sync$/, async ({ req, body }) => syncProject(await requireKeyUser(req), body), { auth: 'key', maxBody: MAX_SYNC_BODY });
 
   /** Stores one fingerprint file. Its SHA-256 must be its id, and the id must be on a bounce of the song. */
-  function storeFingerprint(workId: string, fpId: string, raw: Buffer): void {
+  async function storeFingerprint(workId: string, fpId: string, raw: Buffer): Promise<void> {
     if (sha256(raw) !== fpId) throw new HttpError(400, 'The file does not match its fingerprint id');
     if (raw.length < 18 || raw.subarray(0, 6).toString('latin1') !== 'TBAFP1') throw new HttpError(400, 'Not a Split Tracker fingerprint file');
-    const ev = evidenceOf(workId);
+    const w = await store.workById(workId);
+    const ev = w ? await evidenceOfWork(store, w) : null;
     let found: { kind: string; name: string; bounce: number } | null = null;
     for (const b of ev?.bounces ?? []) {
       if (b.fpId === fpId) found = { kind: 'Master', name: 'Master', bounce: b.num };
@@ -803,8 +817,7 @@ export function createApp(db: Db, options: AppOptions = {}) {
     }
     if (!found) throw new HttpError(400, 'This fingerprint is not on any bounce of the song');
     const seconds = raw.readDoubleLE(6) * raw.readInt32LE(14);
-    db.prepare('INSERT OR REPLACE INTO fingerprints (work_id, fp_id, kind, name, bounce, seconds, data) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(workId, fpId, found.kind, found.name, found.bounce, Number.isFinite(seconds) ? seconds : 0, raw);
+    await store.putFingerprint(workId, { fpId, kind: found.kind, name: found.name, bounce: found.bounce, seconds: Number.isFinite(seconds) ? seconds : 0 }, raw);
   }
 
   /**
@@ -816,37 +829,37 @@ export function createApp(db: Db, options: AppOptions = {}) {
    * - iAmOwner: state themselves as the owner when the receipt names nobody;
    * - useSplit: replace a draft sheet's split with the one in the receipt.
    */
-  route('POST', /^\/api\/receipts$/, ({ req, body }) => {
-    const u = requireUser(req);
-    const r = (body.receipt && typeof body.receipt === 'object' ? body.receipt : {}) as Row;
+  route('POST', /^\/api\/receipts$/, async ({ req, body }) => {
+    const u = await requireUser(req);
+    const r = (body.receipt && typeof body.receipt === 'object' ? body.receipt : {}) as Json;
     if (r.format !== 'split-tracker-receipt' || typeof r.payload !== 'string') throw new HttpError(400, 'That is not a Split Tracker offline receipt. In the plugin: Evidence tab, "Save offline receipt".');
     if (r.version !== 1) throw new HttpError(400, 'This receipt was saved by a newer plugin than this website understands');
     if (sha256(r.payload) !== r.payloadSha256) throw new HttpError(400, 'This receipt file is damaged, or was changed after the plugin saved it. Ask for it to be saved and sent again.');
-    let payload: Row;
-    try { payload = JSON.parse(r.payload) as Row; } catch { throw new HttpError(400, 'This receipt file cannot be read'); }
+    let payload: Json;
+    try { payload = JSON.parse(r.payload) as Json; } catch { throw new HttpError(400, 'This receipt file cannot be read'); }
     if (!payload || typeof payload !== 'object') throw new HttpError(400, 'This receipt file cannot be read');
 
     const projectId = short(payload.projectId, 80);
-    const mine = db.prepare('SELECT work_id FROM sources WHERE user_id = ? AND project_id = ?').get(u.id, projectId) as Row | undefined;
+    const mine = await store.findSource(u.id, projectId);
     if (body.mode === 'add') {
-      const w = db.prepare('SELECT * FROM works WHERE id = ?').get(short(body.workId, 16)) as Row | undefined;
+      const w = await store.workById(short(body.workId, 16));
       if (!w || !manages(u, w)) throw new HttpError(404, 'Choose one of the songs you manage');
-      if (mine && mine.work_id !== w.id) {
-        const other = db.prepare('SELECT title FROM works WHERE id = ?').get(mine.work_id) as Row;
+      if (mine && mine.workId !== w.id) {
+        const other = (await store.workById(mine.workId))!;
         throw new HttpError(409, `This project is already part of "${other.title}". Upload it there, or register it as a new song.`);
       }
-      payload.songCode = w.song_code;
+      payload.songCode = w.songCode;
     }
     else if (short(payload.songCode, 20)) {
       // A code for a song that is no longer on the website: register the project afresh.
       const code = normaliseSongCode(short(payload.songCode, 20));
-      if (!code || !db.prepare('SELECT 1 FROM works WHERE song_code = ?').get(code)) payload.songCode = '';
+      if (!code || !await store.workBySongCode(code)) payload.songCode = '';
     }
-    if (body.iAmOwner === true && !short(payload.ownerArtistId, 20)) payload.ownerArtistId = u.artist_id;
+    if (body.iAmOwner === true && !short(payload.ownerArtistId, 20)) payload.ownerArtistId = u.artistId;
     payload.split = { dirty: body.useSplit === true, baseVersion: 0, force: true };
 
     const madeBy = short(r.madeBy, 80) || short(r.computer, 80) || 'an unnamed computer';
-    const out = syncProject(u, payload, { receipt: { madeBy }, keepDetails: body.mode === 'add' });
+    const out = await syncProject(u, payload, { receipt: { madeBy }, keepDetails: body.mode === 'add' });
 
     let stored = 0;
     const wanted = new Set(out.missingFingerprints);
@@ -854,26 +867,26 @@ export function createApp(db: Db, options: AppOptions = {}) {
     for (const id of wanted) {
       const b64 = files[id];
       if (typeof b64 !== 'string') continue;
-      try { storeFingerprint(out.workId, id, Buffer.from(b64, 'base64')); stored++; } catch { /* a file that does not verify is left out */ }
+      try { await storeFingerprint(out.workId, id, Buffer.from(b64, 'base64')); stored++; } catch { /* a file that does not verify is left out */ }
     }
     return { workId: out.workId, title: out.title, created: out.created, logIntact: out.logIntact, fingerprints: stored, fingerprintsMissing: wanted.size - stored };
   }, { maxBody: MAX_RECEIPT });
 
   /** The plugin uploads one fingerprint file the sync reply asked for. Its SHA-256 must be the id on the receipt. */
-  route('PUT', /^\/api\/plugin\/works\/([0-9a-f]{16})\/fingerprints\/([0-9a-f]{64})$/, ({ req, raw, params }) => {
-    const u = requireKeyUser(req);
+  route('PUT', /^\/api\/plugin\/works\/([0-9a-f]{16})\/fingerprints\/([0-9a-f]{64})$/, async ({ req, raw, params }) => {
+    const u = await requireKeyUser(req);
     const [workId, fpId] = params;
     // Anyone whose project feeds the song may upload that project's fingerprints.
-    if (!db.prepare('SELECT 1 FROM sources WHERE work_id = ? AND user_id = ?').get(workId, u.id)) throw new HttpError(404, 'Song not found');
-    storeFingerprint(workId, fpId, raw);
+    if (!(await store.sourcesOfWork(workId)).some((s) => s.userId === u.id)) throw new HttpError(404, 'Song not found');
+    await storeFingerprint(workId, fpId, raw);
     return { ok: true };
   }, { auth: 'key', raw: true, maxBody: MAX_FINGERPRINT });
 
-  route('GET', /^\/api\/signatures$/, ({ req }): Signature[] => {
-    const u = requireUser(req);
+  route('GET', /^\/api\/signatures$/, async ({ req }): Promise<Signature[]> => {
+    const u = await requireUser(req);
     const out: Signature[] = [];
-    for (const w of visibleWorks(u)) {
-      const ev = evidenceOf(w.id);
+    for (const w of await store.worksVisibleTo(u)) {
+      const ev = await evidenceOfWork(store, w);
       if (!ev) continue;
       const projects = ev.projects ?? [];
       projects.forEach((p, i) => out.push({ workId: w.id, title: w.title, kind: 'Project file', label: p.daw ? `${p.fileName} (${p.daw})` : p.fileName, sha: p.sha, time: p.time, latest: i === projects.length - 1 }));
@@ -882,13 +895,13 @@ export function createApp(db: Db, options: AppOptions = {}) {
     return out;
   });
 
-  route('GET', /^\/api\/fingerprints$/, ({ req }): StoredFingerprint[] => {
-    const u = requireUser(req);
+  route('GET', /^\/api\/fingerprints$/, async ({ req }): Promise<StoredFingerprint[]> => {
+    const u = await requireUser(req);
     const out: StoredFingerprint[] = [];
-    for (const w of visibleWorks(u)) {
-      const ev = evidenceOf(w.id);
+    for (const w of await store.worksVisibleTo(u)) {
+      const ev = await evidenceOfWork(store, w);
       if (!ev) continue;
-      const stored = new Map((db.prepare('SELECT fp_id, seconds FROM fingerprints WHERE work_id = ?').all(w.id) as Row[]).map((f) => [f.fp_id as string, f.seconds as number]));
+      const stored = new Map((await store.fingerprintsOf(w.id)).map((f) => [f.fpId, f.seconds]));
       // Listed from the plugin's record, so two tracks with identical audio still appear as two stems.
       for (const b of [...ev.bounces].reverse()) {
         if (stored.has(b.fpId)) out.push({ workId: w.id, fpId: b.fpId, title: w.title, kind: 'Master', name: 'Master', track: '', bounce: b.num, seconds: stored.get(b.fpId)! });
@@ -900,17 +913,18 @@ export function createApp(db: Db, options: AppOptions = {}) {
   });
 
   /** One master or stem in full: where it came from, its takes, and only the log lines about it. */
-  route('GET', /^\/api\/works\/([0-9a-f]{16})\/fingerprints\/([0-9a-f]{64})\/details$/, ({ req, params }): FingerprintDetails => {
-    const w = visibleWork(requireUser(req), params[0]);
+  route('GET', /^\/api\/works\/([0-9a-f]{16})\/fingerprints\/([0-9a-f]{64})\/details$/, async ({ req, params }): Promise<FingerprintDetails> => {
+    const w = await visibleWork(store, await requireUser(req), params[0]);
     const fpId = params[1];
     const trackName = new URL(req.url ?? '/', 'http://localhost').searchParams.get('track') ?? '';
-    const ev = evidenceOf(w.id);
-    const stored = db.prepare('SELECT seconds FROM fingerprints WHERE work_id = ? AND fp_id = ?').get(w.id, fpId) as Row | undefined;
+    const sources = await loadSources(store, w.id);
+    const ev = evidenceOf(w.ownerId, sources);
+    const stored = (await store.fingerprintsOf(w.id)).find((f) => f.fpId === fpId);
     const bounce = ev?.bounces.find((b) => (trackName ? b.stems.some((st) => st.fpId === fpId && st.trackName === trackName) : b.fpId === fpId));
     if (!ev || !bounce) throw new HttpError(404, 'Nothing recorded for that fingerprint');
     // The log lines come from the project that made this fingerprint, not from the other collaborators' projects.
-    const holder = sourceRows(w.id).find((r) => (JSON.parse(r.data) as Evidence).bounces?.some((b) => b.fpId === fpId || b.stems.some((st) => st.fpId === fpId)));
-    const all = JSON.parse((holder?.log as string) ?? '[]') as LogLine[];
+    const holder = sources.find((x) => x.ev.bounces?.some((b) => b.fpId === fpId || b.stems.some((st) => st.fpId === fpId)));
+    const all = holder ? await store.getSourceLog(holder.r.userId, holder.r.projectId) : [];
     const perTrack = new Set(['TRACK', 'REC', 'TAKE', 'STEM']);
     // The plugin writes track names in quotes, so a stem's lines are the ones naming its track;
     // the master gets everything about the song as a whole.
@@ -927,40 +941,40 @@ export function createApp(db: Db, options: AppOptions = {}) {
     };
   });
 
-  route('GET', /^\/api\/works\/([0-9a-f]{16})\/fingerprints\/([0-9a-f]{64})$/, ({ req, params }) => {
-    const w = visibleWork(requireUser(req), params[0]);
-    const row = db.prepare('SELECT data FROM fingerprints WHERE work_id = ? AND fp_id = ?').get(w.id, params[1]) as Row | undefined;
-    if (!row) throw new HttpError(404, 'Fingerprint not found');
-    return Buffer.from(row.data as Uint8Array);
+  route('GET', /^\/api\/works\/([0-9a-f]{16})\/fingerprints\/([0-9a-f]{64})$/, async ({ req, params }) => {
+    const w = await visibleWork(store, await requireUser(req), params[0]);
+    const data = await store.getFingerprint(w.id, params[1]);
+    if (!data) throw new HttpError(404, 'Fingerprint not found');
+    return Buffer.from(data);
   });
 
   // ---------- your data ----------
 
   /** Everything held about the signed-in person, in one object (the right of access). */
-  route('GET', /^\/api\/me\/export$/, ({ req }) => {
-    const u = requireUser(req);
+  route('GET', /^\/api\/me\/export$/, async ({ req }) => {
+    const u = await requireUser(req);
+    const songs: WorkDetail[] = [];
+    for (const w of await store.worksVisibleTo(u)) songs.push(await detail(store, u, w));
     return {
       exportedAt: new Date().toISOString(),
       profile: userJson(u),
-      pluginKeys: keysOf(u.id).map((k) => ({ name: k.name, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt })),
-      songs: visibleWorks(u).map((w) => detail(u, w)),
-      syncHistory: db.prepare('SELECT work_id, project_id, synced_at, chain_head, chain_ok, summary FROM sync_history WHERE user_id = ? ORDER BY id').all(u.id),
+      pluginKeys: (await keysOf(store, u.id)).map((k) => ({ name: k.name, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt })),
+      songs,
+      syncHistory: (await store.syncHistoryOf(u.id)).map((h) => ({ work_id: h.workId, project_id: h.projectId, synced_at: h.syncedAt, chain_head: h.chainHead, chain_ok: h.chainOk ? 1 : 0, summary: h.summary })),
     };
   });
 
   /** Deletes the account. Songs that other people are on are theirs too, so those have to be dealt with first. */
   route('DELETE', /^\/api\/me$/, async ({ req, res, body }) => {
-    const u = requireUser(req);
-    const hash = await scryptAsync(typeof body.password === 'string' ? body.password.slice(0, 200) : '', Buffer.from(u.pass_salt, 'hex'), 64);
-    if (!timingSafeEqual(hash, Buffer.from(u.pass_hash, 'hex'))) throw new HttpError(401, 'That password is not correct');
-    const owned = db.prepare('SELECT * FROM works WHERE owner_id = ?').all(u.id) as Row[];
-    const shared = owned.filter((w) => w.status === 'signed' || peopleOf(w.id).some((p) => p.email && p.email !== u.email));
-    if (shared.length > 0) throw new HttpError(409, `Other people are on these songs, so hand them to another owner or delete them first: ${shared.map((w) => w.title).join(', ')}`);
-    transaction(db, () => {
-      for (const w of owned) db.prepare('DELETE FROM works WHERE id = ?').run(w.id);
-      db.prepare('UPDATE works SET created_by = owner_id WHERE created_by = ?').run(u.id);
-      db.prepare('DELETE FROM messages WHERE user_id = ?').run(u.id);
-      db.prepare('DELETE FROM users WHERE id = ?').run(u.id);
+    const u = await requireUser(req);
+    const hash = await scryptAsync(typeof body.password === 'string' ? body.password.slice(0, 200) : '', Buffer.from(u.passSalt, 'hex'), 64);
+    if (!timingSafeEqual(hash, Buffer.from(u.passHash, 'hex'))) throw new HttpError(401, 'That password is not correct');
+    await store.transaction(async (tx) => {
+      const owned = await tx.worksOwnedBy(u.id);
+      const shared: WorkRecord[] = [];
+      for (const w of owned) if (w.status === 'signed' || (await tx.peopleOf(w.id)).some((p) => p.email && p.email !== u.email)) shared.push(w);
+      if (shared.length > 0) throw new HttpError(409, `Other people are on these songs, so hand them to another owner or delete them first: ${shared.map((w) => w.title).join(', ')}`);
+      await tx.deleteAccount(u.id, owned.map((w) => w.id));
     });
     res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`);
     return { ok: true };
@@ -979,7 +993,7 @@ export function createApp(db: Db, options: AppOptions = {}) {
     return Buffer.concat(chunks);
   }
 
-  async function readBody(req: IncomingMessage, opts: RouteOptions): Promise<{ body: Row; raw: Buffer }> {
+  async function readBody(req: IncomingMessage, opts: RouteOptions): Promise<{ body: Json; raw: Buffer }> {
     const none = { body: {}, raw: Buffer.alloc(0) };
     if (req.method === 'GET') return none;
     if (opts.auth !== 'key') {
@@ -995,7 +1009,7 @@ export function createApp(db: Db, options: AppOptions = {}) {
     try {
       const parsed = JSON.parse(raw.toString('utf8'));
       if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
-      return { body: parsed as Row, raw };
+      return { body: parsed as Json, raw };
     } catch { throw new HttpError(400, 'Request is not valid JSON'); }
   }
 

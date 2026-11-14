@@ -10,13 +10,14 @@ import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { createApp } from '../../server/app.ts';
 import { openDb } from '../../server/db.ts';
+import { SqliteStore } from '../../server/storeSqlite.ts';
 import { compare, isStrong, parseFingerprintFile } from '../../src/core/fingerprint.ts';
 import { mix, wav16 } from '../synth.ts';
 
 const hostTest = join(import.meta.dirname, '../../../build/HostTest_artefacts/Release/HostTest');
 if (!existsSync(hostTest)) { console.log('HostTest is not built; skipping.'); process.exit(0); }
 
-const app = createApp(openDb(':memory:'));
+const app = createApp(new SqliteStore(openDb(':memory:')));
 const seen: string[] = [];
 const server = createServer((req, res) => { res.on('finish', () => seen.push(`${req.method} ${req.url?.slice(0, 60)} -> ${res.statusCode}`)); void app(req, res); });
 await new Promise<void>((r) => server.listen(0, r));

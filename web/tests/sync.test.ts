@@ -10,12 +10,15 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { createApp } from '../server/app.ts';
 import { backupDatabase, checkDatabase, openDb, tidyDatabase } from '../server/db.ts';
+import { SqliteStore } from '../server/storeSqlite.ts';
 import { normaliseSongCode } from '../src/core/artistId.ts';
+import { makeStore } from './helpers/store.ts';
 
 let server: Server, base = '';
-const db = openDb(':memory:');
-before(async () => { server = createServer(createApp(db)); await new Promise<void>((r) => server.listen(0, r)); base = `http://localhost:${(server.address() as AddressInfo).port}`; });
-after(() => server.close());
+// SQLite in memory by default; STORE=firestore runs the same tests on a throwaway Firestore namespace.
+const backing = await makeStore();
+before(async () => { server = createServer(createApp(backing.store)); await new Promise<void>((r) => server.listen(0, r)); base = `http://localhost:${(server.address() as AddressInfo).port}`; });
+after(async () => { server.close(); await backing.close(); });
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const PASS = 'correct horse battery';
@@ -212,11 +215,13 @@ test('songs and accounts can be deleted, and your data exported', async () => {
   assert.match(blocked.data.error, /Night Signal/);
   assert.equal((await mara.web('DELETE', '/api/me', { password: PASS })).status, 200);
   assert.equal((await mara.web('GET', '/api/me')).status, 401);
-  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM users WHERE email = 'mara@example.com'").get() as any).n, 0);
-  assert.equal(checkDatabase(db).ok, true, 'nothing left pointing at the deleted account');
+  assert.equal(await backing.peek.accountsWithEmail('mara@example.com'), 0);
+  assert.equal(await backing.peek.sound(), true, 'nothing left pointing at the deleted account');
 });
 
-test('housekeeping: backups, checks, tidying and upgrading an older database', async () => {
+// About the SQLite file itself (its backups, its checks, its migrations), so it runs on SQLite only.
+test('housekeeping: backups, checks, tidying and upgrading an older database', { skip: backing.kind !== 'sqlite' && 'SQLite only' }, async () => {
+  const db = backing.db!;
   const dir = mkdtempSync(join(tmpdir(), 'stdb-'));
   const copy = backupDatabase(db, join(dir, 'backups'), 2);
   const restored = openDb(copy);
@@ -245,7 +250,7 @@ test('housekeeping: backups, checks, tidying and upgrading an older database', a
   assert.deepEqual(upgraded.prepare('SELECT user_id, project_id, work_id, chain_head FROM sources').all(), [{ user_id: 1, project_id: 'old-project-0001', work_id: 'aaaaaaaaaaaaaaaa', chain_head: 'h' }]);
   assert.equal(checkDatabase(upgraded).ok, true);
   // Starting the app on it fills in the codes that did not exist before, and the old song still opens.
-  const s2 = createServer(createApp(upgraded)); await new Promise<void>((r) => s2.listen(0, r));
+  const s2 = createServer(createApp(new SqliteStore(upgraded))); await new Promise<void>((r) => s2.listen(0, r));
   const got = upgraded.prepare('SELECT artist_id FROM users').get() as any, song = upgraded.prepare('SELECT song_code, created_by FROM works').get() as any;
   assert.match(got.artist_id, /^ST-/); assert.match(song.song_code, /^SG-/); assert.equal(song.created_by, 1);
   s2.close();

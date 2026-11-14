@@ -6,16 +6,17 @@ import { createHash } from 'node:crypto';
 import { createApp } from '../server/app.ts';
 import { fingerprint, parseFingerprintFile, serialiseFingerprint } from '../src/core/fingerprint.ts';
 import { mix } from './synth.ts';
-import { openDb } from '../server/db.ts';
+import { makeStore } from './helpers/store.ts';
 
 let server: Server, base = '';
-const db = openDb(':memory:');
+// SQLite in memory by default; STORE=firestore runs the same tests on a throwaway Firestore namespace.
+const backing = await makeStore();
 before(async () => {
-  server = createServer(createApp(db));
+  server = createServer(createApp(backing.store));
   await new Promise<void>((r) => server.listen(0, r));
   base = `http://localhost:${(server.address() as AddressInfo).port}`;
 });
-after(() => server.close());
+after(async () => { server.close(); await backing.close(); });
 
 /** One browser: remembers its session cookie. */
 let lastCookies = new Map<object, string>();
@@ -60,10 +61,10 @@ test('accounts: register, wrong password, sign in, sign out', async () => {
   assert.equal((await nova('GET', '/api/me')).data.artistName, 'Nova Kane');
 
   // Passwords and session tokens are never stored as they are.
-  const u = db.prepare('SELECT * FROM users').get() as any;
-  assert.ok(!JSON.stringify(u).includes(PASS));
-  const s = db.prepare('SELECT token_hash FROM sessions').all() as any[];
-  assert.ok(s.length > 0 && s.every((x) => /^[0-9a-f]{64}$/.test(x.token_hash)));
+  const u = await backing.peek.users();
+  assert.ok(u.length > 0 && !JSON.stringify(u).includes(PASS));
+  const s = await backing.peek.sessionTokens();
+  assert.ok(s.length > 0 && s.every((x) => /^[0-9a-f]{64}$/.test(x)));
 });
 
 test('requests from another site or without JSON are refused', async () => {
@@ -323,7 +324,7 @@ test('the plugin syncs a project: song, split, evidence and fingerprints', async
 });
 
 test('editing the stored history is detected', async () => {
-  db.prepare("UPDATE events SET text = 'Nova Kane set the split (writer/master): Nova Kane 100/100' WHERE work_id = ? AND type = 'SPLIT'").run(workId);
+  await backing.peek.rewriteHistory(workId, 'SPLIT', 'Nova Kane set the split (writer/master): Nova Kane 100/100');
   assert.equal((await nova('GET', `/api/works/${workId}`)).data.chainIntact, false);
 });
 

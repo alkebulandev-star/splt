@@ -1,7 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "cd web && npm ci --ignore-scripts",
-  "buildCommand": "cd web && npm run build",
-  "outputDirectory": "web/dist"
+  "installCommand": "npm install --no-audit --no-fund && cd web && npm ci --ignore-scripts",
+  "buildCommand": "cd web && npm run build && node build-api.mjs",
+  "outputDirectory": "web/dist",
+  "rewrites": [{ "source": "/api/(.*)", "destination": "/api" }],
+  "functions": { "api/index.js": { "maxDuration": 30 } }
 }
