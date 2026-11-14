@@ -4,9 +4,9 @@ import { $, $$ } from './dom.ts';
 /** Views inside the signed-in workspace. Everything else is the public site or the sign-in page. */
 export const WORKSPACE_VIEWS = ['dashboard', 'collaborate', 'identify', 'verify', 'messages', 'profile'] as const;
 
-const loaders = new Map<string, () => void | Promise<void>>();
-/** Registers what a view does each time it is shown (usually: fetch and draw). */
-export const onShow = (name: string, load: () => void | Promise<void>): void => void loaders.set(name, load);
+const loaders = new Map<string, (() => void | Promise<void>)[]>();
+/** Registers something a view does each time it is shown (usually: fetch and draw). A view may have several. */
+export const onShow = (name: string, load: () => void | Promise<void>): void => void loaders.set(name, [...(loaders.get(name) ?? []), load]);
 
 const current = (): string => location.hash.replace('#', '') || 'home';
 
@@ -31,7 +31,7 @@ function show(): void {
     else b.removeAttribute('aria-current');
   }
   window.scrollTo(0, 0);
-  void loaders.get(name)?.();
+  for (const load of loaders.get(name) ?? []) void load();
 }
 
 export function startRouter(): void {

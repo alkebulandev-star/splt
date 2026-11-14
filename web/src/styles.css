@@ -304,3 +304,76 @@ tr.collabform input,tr.collabform select{width:auto;flex:1;min-width:140px}
 .rcopts input[type=radio],.rcopts input[type=checkbox]{display:inline-block;width:auto;height:auto;margin:0 6px 0 0;padding:0;vertical-align:middle;accent-color:var(--type)}
 .rcopts label,.rcsub label{font-size:15px;color:var(--type);font-weight:400;text-transform:none;letter-spacing:0}
 .rcsub select{width:auto;max-width:100%}
+
+/* ---------- phones ---------- */
+.side .ico{display:none}
+.side .lbl .sm,.mobileonly{display:none}
+.logo span{white-space:nowrap}
+@media (max-width:700px){
+  /* Text under 16px makes iOS zoom the page when a field is tapped. */
+  input,select,textarea{font-size:16px}
+  .nav{gap:10px;padding-block:14px}
+  .nav .pill{padding:8px 13px}
+  .hero{padding-block:28px 48px;gap:32px}
+  .hero .cta .pill{flex:1;justify-content:center}
+
+  /* The side bar becomes a tab bar along the bottom, as in a phone app. */
+  #shell{display:block}
+  .side{position:fixed;left:0;right:0;bottom:0;z-index:15;flex-direction:row;align-items:stretch;gap:0;overflow:visible;
+    padding:4px max(4px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(4px,env(safe-area-inset-left,0px));
+    border-top:1px solid var(--line)}
+  .side .logo,.side .foot{display:none}
+  .side button.tab{flex:1;min-width:0;flex-direction:column;justify-content:center;gap:3px;padding:7px 2px 5px;font-size:10.5px;font-weight:500;border-radius:10px;text-align:center;position:relative}
+  .side button.tab[aria-current="page"]{background:none;color:var(--text)}
+  .side button.tab[aria-current="page"] .ico{stroke:var(--good)}
+  .side .ico{display:block;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .side .lbl .lg{display:none}.side .lbl .sm{display:inline}
+  .side .lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .side .count{position:absolute;top:2px;left:calc(50% + 6px);margin:0;font-size:9px;padding:0 5px}
+  .mobileonly{display:inline-flex}
+  .main{padding:16px max(14px,env(safe-area-inset-right,0px)) calc(84px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px))}
+  #toast{bottom:calc(76px + env(safe-area-inset-bottom,0px));max-width:calc(100vw - 28px);border-radius:14px;text-align:center}
+
+  .top{gap:10px;margin-bottom:16px}
+  .top h1{font-size:22px;flex:1 1 100%}
+  .top select{flex:1;min-width:0}
+  .kpis{gap:8px}.kpi{padding:12px}.kpi b{font-size:28px}
+  .card > header{padding:12px 14px}
+  .card .pad{padding:14px}
+  .btn{min-height:44px}
+  .actions{display:flex;flex-wrap:wrap;gap:8px}
+  .actions .btn{flex:1 1 auto}
+  .grid2,.evgrid{grid-template-columns:1fr}
+  .total{padding:12px 14px}
+  .bubble{max-width:100%}
+  .rczone{flex-direction:column;align-items:stretch;text-align:center}
+
+  /* Tables become a stack of cards: one card per row, each value beside its column heading. */
+  .scroll{overflow-x:visible}
+  table,#sheet,#worksByAlbum table,.scroll table{min-width:0!important;width:100%;display:block}
+  #regTable,.album + .scroll table{min-width:0!important}
+  #sheet td input:not(.share),#sheet td select,td select,td input{min-width:0!important}
+  thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+  tbody{display:block}
+  tbody tr{display:block;padding:10px 14px;border-bottom:1px solid var(--rule)}
+  tbody tr:last-child{border-bottom:0}
+  td{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:5px 0;border:0;text-align:right;min-width:0;overflow-wrap:anywhere}
+  td.num{text-align:right}
+  td::before{content:attr(data-label);flex:none;max-width:42%;color:var(--mute);font-size:12px;font-weight:500;text-align:left}
+  td[colspan]{display:block;text-align:left}
+  td[colspan]::before,td:not([data-label])::before,td[data-label=""]::before{content:none}
+  td:empty{display:none}
+  td input,td select{flex:1;min-width:0;max-width:62%;padding:9px 10px;font-size:16px}
+  td input.share{width:auto;max-width:96px}
+  td .name{flex:1;min-width:0;justify-content:flex-end}
+  td .name input{max-width:none}
+  td .worklink{text-align:right;font-weight:600}
+  td .mono{text-align:right}
+  tr.collabform td{padding:0}
+  tr.collabform form{flex-direction:column;align-items:stretch}
+  tr.collabform input,tr.collabform select{width:100%;max-width:none;min-width:0}
+}
+@media (max-width:380px){
+  .side button.tab{font-size:9.5px}
+  .hero h1{font-size:36px}
+}

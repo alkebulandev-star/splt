@@ -40,10 +40,13 @@ export function startAuth(): void {
     }
   });
 
-  $('#signOut').addEventListener('click', async () => {
+  const signOut = async (): Promise<void> => {
     await ctx.backend.logout().catch(() => undefined);
     ctx.user = null;
     ctx.workId = null;
     go('home');
-  });
+  };
+  $('#signOut').addEventListener('click', signOut);
+  // On a phone the side bar becomes a bottom tab bar, so Sign out also sits on the Profile page.
+  document.querySelectorAll<HTMLElement>('[data-signout]').forEach((b) => b.addEventListener('click', signOut));
 }
