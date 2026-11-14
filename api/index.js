@@ -313,7 +313,8 @@ function createApp(store, options = {}) {
   route("POST", /^\/api\/login$/, async ({ req, res, body }) => {
     const address = email(body.email, true);
     const password = typeof body.password === "string" ? body.password : "";
-    const key = `${address}|${req.socket.remoteAddress}`;
+    const forwarded = options.trustProxy ? String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() : "";
+    const key = `${address}|${forwarded || req.socket?.remoteAddress || "unknown"}`;
     if (await store.loginFailures(key, Date.now()) >= LOGIN_TRIES) throw new HttpError(429, "Too many attempts. Wait 15 minutes and try again.");
     const u = await store.userByEmail(address);
     const salt = u ? Buffer.from(u.passSalt, "hex") : Buffer.alloc(16);
@@ -1983,9 +1984,15 @@ async function handler(req, res) {
     try {
       const found = findKey(process.env);
       why = found.why;
-      if (found.key) app = createApp(FirestoreStore.open({ ...process.env, FIREBASE_SERVICE_ACCOUNT: JSON.stringify(found.key) }), { secureCookies: true });
+      if (found.key) app = createApp(FirestoreStore.open({ ...process.env, FIREBASE_SERVICE_ACCOUNT: JSON.stringify(found.key) }), { secureCookies: true, trustProxy: true });
     } catch (err) {
       why = `The key was found but Firebase refused it: ${err.message}`;
+    }
+    if (!app && !process.env.FIREBASE_SERVICE_ACCOUNT) {
+      try {
+        app = createApp(FirestoreStore.open(process.env), { secureCookies: true, trustProxy: true });
+      } catch {
+      }
     }
     if (!app) {
       const names = Object.keys(process.env).filter((n) => /FIREBASE|GOOGLE|STORE|SPLIT|PROJECT_ID|CLIENT_EMAIL|PRIVATE_KEY|^API|KEY$/i.test(n) && !/^(VERCEL|AWS|NODE|NX|TURBO)_/.test(n)).sort();

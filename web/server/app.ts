@@ -64,6 +64,9 @@ export interface AppOptions {
   pagePath?: string;
   /** Set when served over HTTPS so the session cookie is marked Secure. */
   secureCookies?: boolean;
+  /** Set when a trusted proxy (Vercel) sits in front and passes the caller's address in X-Forwarded-For.
+      Never set it on a server reached directly: the header could then be made up to dodge the sign-in limit. */
+  trustProxy?: boolean;
 }
 
 /**
@@ -272,7 +275,9 @@ export function createApp(store: Store, options: AppOptions = {}) {
   route('POST', /^\/api\/login$/, async ({ req, res, body }) => {
     const address = email(body.email, true);
     const password = typeof body.password === 'string' ? body.password : '';
-    const key = `${address}|${req.socket.remoteAddress}`;
+    // Behind a proxy the connection is the proxy's (and on Vercel there may be no socket at all).
+    const forwarded = options.trustProxy ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() : '';
+    const key = `${address}|${forwarded || req.socket?.remoteAddress || 'unknown'}`;
     if (await store.loginFailures(key, Date.now()) >= LOGIN_TRIES) throw new HttpError(429, 'Too many attempts. Wait 15 minutes and try again.');
 
     const u = await store.userByEmail(address);

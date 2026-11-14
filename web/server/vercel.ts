@@ -58,9 +58,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const found = findKey(process.env);
       why = found.why;
       // Opened once and reused while this function instance stays warm.
-      if (found.key) app = createApp(FirestoreStore.open({ ...process.env, FIREBASE_SERVICE_ACCOUNT: JSON.stringify(found.key) }), { secureCookies: true });
+      if (found.key) app = createApp(FirestoreStore.open({ ...process.env, FIREBASE_SERVICE_ACCOUNT: JSON.stringify(found.key) }), { secureCookies: true, trustProxy: true });
     } catch (err) {
       why = `The key was found but Firebase refused it: ${(err as Error).message}`;
+    }
+    if (!app && !process.env.FIREBASE_SERVICE_ACCOUNT) {
+      // Not on Vercel: a key file on this computer (FIREBASE_KEY_FILE, or the usual place) will do.
+      try { app = createApp(FirestoreStore.open(process.env), { secureCookies: true, trustProxy: true }); } catch { /* `why` already says what is missing */ }
     }
     if (!app) {
       // Names only, never values, so the cause can be seen without opening Vercel's logs.
