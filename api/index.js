@@ -1941,16 +1941,64 @@ var FirestoreStore = class _FirestoreStore {
 };
 
 // server/vercel.ts
+function readKey(text2) {
+  let t = text2.trim();
+  if (t.startsWith('"') && t.endsWith('"') || t.startsWith("'") && t.endsWith("'")) t = t.slice(1, -1).trim();
+  if (!t.startsWith("{") && /^[A-Za-z0-9+/=\s]+$/.test(t)) {
+    try {
+      t = Buffer.from(t, "base64").toString("utf8").trim();
+    } catch {
+    }
+  }
+  const tidy = (k) => typeof k.project_id === "string" && typeof k.client_email === "string" && typeof k.private_key === "string" && k.private_key.includes("PRIVATE KEY") ? { project_id: k.project_id.trim(), client_email: k.client_email.trim(), private_key: k.private_key.replace(/\\n/g, "\n") } : null;
+  try {
+    const k = tidy(JSON.parse(t));
+    if (k) return k;
+  } catch {
+  }
+  const field = (name) => new RegExp(`"${name}"\\s*:\\s*"([^"]*)"`).exec(t)?.[1];
+  const pem = /-----BEGIN PRIVATE KEY-----[\s\S]*?-----END PRIVATE KEY-----/.exec(t)?.[0];
+  return tidy({ project_id: field("project_id"), client_email: field("client_email"), private_key: pem ? pem.replace(/\\n/g, "\n").replace(/\r/g, "") + "\n" : void 0 });
+}
+function findKey(env) {
+  const named = env.FIREBASE_SERVICE_ACCOUNT;
+  if (named) {
+    const key2 = readKey(named);
+    if (key2) return { key: key2, why: "" };
+  }
+  for (const [name, value] of Object.entries(env))
+    if (value && name !== "FIREBASE_SERVICE_ACCOUNT" && value.includes("PRIVATE KEY") && value.includes("client_email")) {
+      const key2 = readKey(value);
+      if (key2) return { key: key2, why: "" };
+    }
+  const part = (suffix) => Object.entries(env).find(([name, value]) => value && new RegExp(`(^|_)${suffix}$`, "i").test(name))?.[1];
+  const key = readKey(JSON.stringify({ project_id: part("project_id"), client_email: part("client_email"), private_key: part("private_key") }));
+  if (key) return { key, why: "" };
+  return { key: null, why: named ? `FIREBASE_SERVICE_ACCOUNT is set (${named.length} characters) but is not a whole Firebase key: it must be the complete key file, starting with { and ending with }.` : "FIREBASE_SERVICE_ACCOUNT is not set in this deployment." };
+}
 var app;
 async function handler(req, res) {
-  try {
-    app ??= createApp(FirestoreStore.open(process.env), { secureCookies: true });
-  } catch (err) {
-    console.error("Split Tracker could not start:", err.message);
-    res.statusCode = 500;
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.end(JSON.stringify({ error: "The server is not set up yet. In Vercel, add the environment variable FIREBASE_SERVICE_ACCOUNT (the whole Firebase key file) and redeploy." }));
-    return;
+  if (!app) {
+    let why = "";
+    try {
+      const found = findKey(process.env);
+      why = found.why;
+      if (found.key) app = createApp(FirestoreStore.open({ ...process.env, FIREBASE_SERVICE_ACCOUNT: JSON.stringify(found.key) }), { secureCookies: true });
+    } catch (err) {
+      why = `The key was found but Firebase refused it: ${err.message}`;
+    }
+    if (!app) {
+      const names = Object.keys(process.env).filter((n) => /FIREBASE|GOOGLE|STORE|SPLIT|PROJECT_ID|CLIENT_EMAIL|PRIVATE_KEY|^API|KEY$/i.test(n) && !/^(VERCEL|AWS|NODE|NX|TURBO)_/.test(n)).sort();
+      console.error("Split Tracker could not start:", why);
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.end(JSON.stringify({
+        error: "The server is not set up yet. In Vercel, add the environment variable FIREBASE_SERVICE_ACCOUNT (the whole Firebase key file) and redeploy.",
+        reason: why,
+        variablesSeen: names
+      }));
+      return;
+    }
   }
   await app(req, res);
 }
