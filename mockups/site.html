@@ -1,0 +1,735 @@
+<title>Split Tracker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a studio-desk landing page. A woven kente band is the one loud element; everything else reads like a receipt and a plugin window. */
+:root {
+  --bg: #F6F7F3;
+  --surface: #FFFFFF;
+  --sunk: #ECEEE7;
+  --fg: #16201A;
+  --muted: #5A6660;
+  --line: #D7DCD3;
+  --gold: #C98F00;
+  --gold-soft: #FFF3D1;
+  --green: #17704A;
+  --green-soft: #DDF1E6;
+  --red: #B8322A;
+  --red-soft: #FBE3E0;
+  --amber: #A86400;
+  --amber-soft: #FDEBCB;
+  --ink: #0F1712;
+  --on-ink: #F1F4EE;
+  --k1: #E3A918; --k2: #1F7A4D; --k3: #B8322A; --k4: #111;
+  --font-display: "Unbounded", "Arial Black", system-ui, sans-serif;
+  --font-body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(15,23,18,.06), 0 8px 24px rgba(15,23,18,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1411; --surface: #151D18; --sunk: #1B251F; --fg: #E9EEE8; --muted: #9AA8A0; --line: #2A372F;
+    --gold: #F0B529; --gold-soft: #3A2E0E; --green: #4CC38A; --green-soft: #163626;
+    --red: #F07368; --red-soft: #3E1C19; --amber: #F2A33A; --amber-soft: #3B2A12;
+    --ink: #070B09; --on-ink: #F1F4EE; --k4: #000;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1411; --surface: #151D18; --sunk: #1B251F; --fg: #E9EEE8; --muted: #9AA8A0; --line: #2A372F;
+  --gold: #F0B529; --gold-soft: #3A2E0E; --green: #4CC38A; --green-soft: #163626;
+  --red: #F07368; --red-soft: #3E1C19; --amber: #F2A33A; --amber-soft: #3B2A12;
+  --ink: #070B09; --on-ink: #F1F4EE; --k4: #000;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--ink); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.12; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2rem, 5.2vw, 3.6rem); font-weight: 800; }
+h2 { font-size: clamp(1.4rem, 3vw, 2.1rem); font-weight: 700; }
+h3 { font-size: 1.02rem; font-weight: 700; }
+p { margin: 0; }
+.mono { font-family: var(--font-mono); font-size: .86em; }
+.eyebrow { font-size: .74rem; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; color: var(--muted); }
+a { color: inherit; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 4px; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* Header */
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--ink); color: var(--on-ink); }
+header.top .wrap { display: flex; align-items: center; gap: 20px; padding-block: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 1rem; text-decoration: none; }
+.brand-mark { width: 26px; height: 26px; border-radius: 6px; background:
+  repeating-linear-gradient(90deg, var(--k1) 0 4px, var(--k2) 4px 8px, var(--k3) 8px 10px, var(--k1) 10px 14px); }
+nav.links { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+nav.links a { text-decoration: none; padding: 6px 12px; border-radius: 999px; font-weight: 600; font-size: .92rem; color: #C9D2CB; }
+nav.links a:hover { color: #fff; background: rgba(255,255,255,.08); }
+nav.links a[aria-current="page"] { background: var(--k1); color: #111; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 18px; border-radius: 8px; border: 1px solid transparent; font-weight: 700; cursor: pointer; text-decoration: none; font-size: .95rem; transition: transform .12s ease, background .15s; }
+.btn:active { transform: translateY(1px); }
+.btn-gold { background: var(--k1); color: #111; }
+.btn-gold:hover { background: #F2BC33; }
+.btn-ghost { background: transparent; border-color: var(--line); color: var(--fg); }
+.btn-ghost:hover { background: var(--sunk); }
+.btn-green { background: var(--green); color: #fff; }
+:root[data-theme="dark"] .btn-green { color: #06140D; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn-green { color: #06140D; } }
+.btn-small { padding: 7px 12px; font-size: .85rem; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* Kente band */
+.kente { height: 22px; background:
+  repeating-linear-gradient(90deg,
+    var(--k1) 0 28px, var(--k4) 28px 32px, var(--k2) 32px 52px, var(--k4) 52px 56px,
+    var(--k3) 56px 64px, var(--k1) 64px 92px, var(--k2) 92px 100px, var(--k4) 100px 104px),
+  var(--k1);
+  position: relative; }
+.kente::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 2px, transparent 2px 6px); mix-blend-mode: multiply; }
+
+/* Hero */
+.hero { background: var(--ink); color: var(--on-ink); }
+.hero .wrap { display: grid; grid-template-columns: 1.05fr 1fr; gap: 48px; padding-block: 64px 72px; align-items: center; }
+.hero h1 em { font-style: normal; color: var(--k1); }
+.hero p.lede { margin-top: 18px; font-size: 1.12rem; color: #C3CEC6; max-width: 34rem; }
+.hero .cta { display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap; }
+.hero .cta .btn-ghost { color: var(--on-ink); border-color: #3A4A40; }
+.hero .cta .btn-ghost:hover { background: rgba(255,255,255,.06); }
+.hero .daws { margin-top: 22px; font-size: .86rem; color: #93A399; display: flex; gap: 14px; flex-wrap: wrap; }
+.hero .daws span::before { content: "✓ "; color: var(--k1); }
+
+/* Plugin window */
+.plugin { background: #1B2420; border: 1px solid #2E3B34; border-radius: 12px; box-shadow: 0 30px 60px rgba(0,0,0,.45); overflow: hidden; color: #E6ECE7; font-size: .9rem; min-width: 0; }
+.plugin-bar { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: #141B17; border-bottom: 1px solid #2E3B34; font-size: .78rem; color: #8C9A92; }
+.dots { display: flex; gap: 6px; }
+.dots i { width: 10px; height: 10px; border-radius: 50%; background: #3A4840; display: block; }
+.plugin-bar .slot { margin-left: auto; font-family: var(--font-mono); }
+.pbanner { padding: 10px 14px; font-weight: 700; display: flex; align-items: center; gap: 10px; transition: background .25s; }
+.pbanner[data-state="red"] { background: #7D221C; }
+.pbanner[data-state="amber"] { background: #8A5A00; }
+.pbanner[data-state="green"] { background: #165C3C; }
+.pbanner.flash { animation: flash .5s ease 3; }
+@keyframes flash { 50% { filter: brightness(1.5); } }
+.ptabs { display: flex; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid #2E3B34; overflow-x: auto; }
+.ptabs span { padding: 6px 12px; border-radius: 6px 6px 0 0; color: #8C9A92; font-weight: 600; font-size: .82rem; }
+.ptabs span.on { background: #24302A; color: #fff; }
+.pbody { padding: 12px 14px 14px; display: grid; gap: 10px; }
+.psong { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: .82rem; color: #9DAAA2; }
+.psong b { color: #fff; font-size: .95rem; }
+.ptable-wrap { overflow-x: auto; }
+.ptable { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.ptable th { text-align: left; font-weight: 600; color: #8C9A92; padding: 5px 6px; border-bottom: 1px solid #2E3B34; white-space: nowrap; }
+.ptable td { padding: 6px; border-bottom: 1px solid #222D27; white-space: nowrap; }
+.ptable td.r, .ptable th.r { text-align: right; }
+.flag { color: #F2A33A; font-weight: 700; }
+.ptotal { display: flex; justify-content: space-between; font-size: .82rem; color: #9DAAA2; }
+.ptotal b.ok { color: #4CC38A; } .ptotal b.bad { color: #F07368; }
+.pactions { display: flex; gap: 8px; flex-wrap: wrap; }
+.pactions .btn { padding: 8px 12px; font-size: .82rem; }
+.pactions .btn-ghost { color: #E6ECE7; border-color: #3A4A40; }
+.pactions .btn-ghost:hover { background: #24302A; }
+.pnote { font-size: .76rem; color: #8C9A92; }
+
+/* Receipt pop */
+.receipt-pop { background: #F7F5EE; color: #1A1A1A; border-radius: 8px; padding: 12px 14px; font-family: var(--font-mono); font-size: .74rem; line-height: 1.5; border: 1px dashed #B9B39E; }
+.receipt-pop strong { font-family: var(--font-body); font-size: .86rem; }
+
+/* Sections */
+section.band { padding-block: 72px; }
+section.band.alt { background: var(--sunk); }
+.sec-head { display: grid; gap: 10px; max-width: 42rem; margin-bottom: 36px; }
+.sec-head p { color: var(--muted); font-size: 1.05rem; }
+
+/* Steps */
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 2px solid var(--fg); }
+.step { padding: 20px 20px 4px 0; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.step + .step { padding-left: 20px; border-left: 1px solid var(--line); }
+.step .n { font-family: var(--font-display); font-size: 2rem; font-weight: 800; color: var(--gold); line-height: 1; }
+.step p { color: var(--muted); font-size: .95rem; }
+.step .where { font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--green); }
+
+/* Features */
+.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.feature { background: var(--surface); padding: 22px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.feature p { color: var(--muted); font-size: .94rem; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: .72rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; letter-spacing: .03em; width: fit-content; }
+.chip.live { background: var(--green-soft); color: var(--green); }
+.chip.soon { background: var(--gold-soft); color: var(--amber); }
+
+/* Proof strip */
+.proof { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+.chain { display: grid; gap: 8px; font-family: var(--font-mono); font-size: .8rem; min-width: 0; }
+.chain .link { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; overflow: hidden; }
+.chain .link span { color: var(--muted); }
+.chain .link code { overflow-wrap: anywhere; }
+.chain .arrow { text-align: center; color: var(--gold); font-weight: 700; }
+.chain .anchor { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+.chain .anchor span { color: #93A399; }
+
+/* Privacy */
+.privacy { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.privacy .col { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; display: grid; gap: 10px; align-content: start; }
+.privacy ul { margin: 0; padding-left: 18px; color: var(--muted); display: grid; gap: 4px; }
+.privacy .law { font-size: .86rem; color: var(--muted); grid-column: 1 / -1; }
+
+/* Register CTA */
+.register { background: var(--ink); color: var(--on-ink); }
+.register .wrap { display: flex; gap: 24px; align-items: center; justify-content: space-between; padding-block: 48px; flex-wrap: wrap; }
+.register p { color: #C3CEC6; max-width: 36rem; margin-top: 8px; }
+
+footer { padding-block: 28px; color: var(--muted); font-size: .86rem; }
+footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+/* ===== Artist app ===== */
+.demo-note { background: var(--gold-soft); color: var(--fg); border-bottom: 1px solid var(--line); font-size: .86rem; }
+.demo-note .wrap { padding-block: 8px; }
+.app { display: grid; grid-template-columns: 300px 1fr; gap: 24px; padding-block: 28px 64px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
+.panel-head { padding: 16px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.me { display: flex; gap: 12px; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: var(--green-soft); color: var(--green); flex: none; }
+.me small { color: var(--muted); display: block; font-size: .8rem; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--line); }
+.stats div { padding: 12px 14px; display: grid; gap: 2px; }
+.stats div + div { border-left: 1px solid var(--line); }
+.stats b { font-family: var(--font-display); font-size: 1.15rem; }
+.stats span { font-size: .74rem; color: var(--muted); }
+.songlist { list-style: none; margin: 0; padding: 6px; display: grid; gap: 2px; }
+.songlist button { width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: 10px 12px; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; }
+.songlist button:hover { background: var(--sunk); }
+.songlist button[aria-pressed="true"] { background: var(--sunk); box-shadow: inset 3px 0 0 var(--gold); }
+.songlist small { color: var(--muted); font-size: .8rem; }
+.pill { font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; align-self: center; grid-row: 1 / span 2; grid-column: 2; }
+.pill.ok { background: var(--green-soft); color: var(--green); }
+.pill.wait { background: var(--amber-soft); color: var(--amber); }
+.pill.bad { background: var(--red-soft); color: var(--red); }
+
+.detail { display: grid; gap: 20px; min-width: 0; }
+.song-hero { padding: 20px 22px; display: grid; gap: 14px; }
+.song-hero .meta { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: .88rem; }
+.song-hero .meta b { color: var(--fg); font-weight: 600; }
+.statusbar { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 8px; font-weight: 600; flex-wrap: wrap; }
+.statusbar.ok { background: var(--green-soft); color: var(--green); }
+.statusbar.wait { background: var(--amber-soft); color: var(--amber); }
+.statusbar .btn { margin-left: auto; }
+.tbl-wrap { overflow-x: auto; }
+table.splits { width: 100%; border-collapse: collapse; font-size: .9rem; }
+table.splits th { text-align: left; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.splits td { padding: 12px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.splits tr:last-child td { border-bottom: 0; }
+table.splits td.r, table.splits th.r { text-align: right; }
+table.splits tr.mine td { background: var(--gold-soft); }
+.who b { display: block; } .who small { color: var(--muted); }
+.bar { height: 6px; border-radius: 3px; background: var(--sunk); width: 90px; display: inline-block; vertical-align: middle; margin-left: 8px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--gold); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.timeline { list-style: none; margin: 0; padding: 14px 18px; display: grid; gap: 12px; }
+.timeline li { display: grid; grid-template-columns: 74px 1fr; gap: 10px; font-size: .88rem; }
+.timeline time { color: var(--muted); font-family: var(--font-mono); font-size: .76rem; padding-top: 2px; }
+.timeline .tag { font-family: var(--font-mono); font-size: .7rem; font-weight: 600; color: var(--green); margin-right: 6px; }
+.sessions { padding: 14px 18px; display: grid; gap: 10px; }
+.srow { display: grid; grid-template-columns: 1fr auto; gap: 4px; font-size: .88rem; }
+.srow .track { height: 8px; border-radius: 4px; background: var(--sunk); grid-column: 1 / -1; overflow: hidden; }
+.srow .track i { display: block; height: 100%; background: var(--green); }
+.bounces { padding: 6px 0; }
+.bounce { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; padding: 12px 18px; align-items: center; border-bottom: 1px solid var(--line); font-size: .88rem; }
+.bounce:last-child { border-bottom: 0; }
+.bounce .no { font-family: var(--font-display); font-weight: 700; color: var(--gold); }
+.bounce code { font-family: var(--font-mono); font-size: .74rem; color: var(--muted); overflow-wrap: anywhere; }
+.bounce > div { min-width: 0; }
+
+/* Modal */
+.scrim { position: fixed; inset: 0; background: rgba(5,10,7,.55); display: grid; place-items: center; z-index: 50; padding: 16px; }
+.phone { width: min(340px, 100%); background: var(--surface); border-radius: 28px; border: 8px solid var(--ink); padding: 26px 22px 22px; display: grid; gap: 14px; box-shadow: var(--shadow); }
+.phone .sms { background: var(--sunk); border-radius: 14px; padding: 10px 12px; font-size: .85rem; }
+.phone .sms small { color: var(--muted); display: block; margin-bottom: 4px; font-size: .74rem; }
+.otp { display: flex; gap: 6px; justify-content: space-between; }
+.otp input { width: 100%; min-width: 0; text-align: center; font-family: var(--font-mono); font-size: 1.3rem; padding: 10px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.phone .err { color: var(--red); font-size: .84rem; min-height: 1.2em; }
+.phone .fine { font-size: .76rem; color: var(--muted); }
+
+/* ===== Verify ===== */
+.verify { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding-block: 32px 72px; align-items: start; }
+.drop { border: 2px dashed var(--line); border-radius: var(--radius); padding: 36px 22px; text-align: center; display: grid; gap: 12px; justify-items: center; background: var(--surface); transition: border-color .15s, background .15s; }
+.drop.over { border-color: var(--gold); background: var(--gold-soft); }
+.drop .big { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; }
+.drop p { color: var(--muted); font-size: .9rem; max-width: 26rem; }
+.field { display: grid; gap: 6px; }
+.field label { font-weight: 600; font-size: .88rem; }
+.field input { padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-family: var(--font-mono); font-size: .86rem; min-width: 0; width: 100%; }
+.row { display: flex; gap: 8px; }
+.result { padding: 22px; display: grid; gap: 14px; }
+.result .verdict { display: flex; gap: 14px; align-items: center; }
+.result .score { font-family: var(--font-display); font-weight: 800; font-size: 2.4rem; line-height: 1; }
+.result.same .score { color: var(--green); }
+.result.maybe .score { color: var(--amber); }
+.result.none .score { color: var(--muted); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: .88rem; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+.meter { height: 10px; border-radius: 5px; background: var(--sunk); overflow: hidden; }
+.meter i { display: block; height: 100%; }
+.empty { padding: 28px 22px; color: var(--muted); display: grid; gap: 8px; }
+.samples { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .hero .wrap, .proof, .app, .verify, .privacy { grid-template-columns: 1fr; }
+  .features { grid-template-columns: 1fr 1fr; }
+  .steps { grid-template-columns: 1fr 1fr; }
+  .step:nth-child(3) { padding-left: 0; border-left: 0; }
+  .two { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .features, .steps { grid-template-columns: 1fr; }
+  .step + .step { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
+  .hero .wrap { padding-block: 40px 48px; }
+  section.band { padding-block: 52px; }
+  nav.links { margin-left: 0; width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#home"><span class="brand-mark" aria-hidden="true"></span>Split Tracker</a>
+    <nav class="links" aria-label="Main">
+      <a href="#home" data-view="home">Plugin</a>
+      <a href="#artists" data-view="artists">Artist portal</a>
+      <a href="#verify" data-view="verify">Verify a song</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ================= HOME ================= -->
+<main id="view-home" data-view-panel="home">
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <p class="eyebrow" style="color:#93A399">For studios, writers &amp; producers in Ghana and beyond</p>
+        <h1 style="margin-top:14px">Every split.<br>Every session.<br><em>On record.</em></h1>
+        <p class="lede">Put Split Tracker on your master track. It keeps the split sheet with real IPI and GHAMRO numbers, logs who worked on the song and for how long, and reminds everyone at every bounce when the splits aren't signed yet.</p>
+        <div class="cta">
+          <button class="btn btn-gold" type="button" id="dl-btn">Download free plugin</button>
+          <a class="btn btn-ghost" href="#artists">See the artist portal</a>
+        </div>
+        <p class="pnote" id="dl-msg" hidden style="margin-top:12px;color:#C3CEC6">Downloads open at launch. This is a preview of the site.</p>
+        <div class="daws"><span>Logic Pro (AU)</span><span>FL Studio</span><span>Ableton Live (VST3)</span><span>Pro Tools (AAX, coming)</span></div>
+      </div>
+
+      <!-- Interactive plugin -->
+      <div class="plugin" aria-label="Interactive plugin preview">
+        <div class="plugin-bar"><span class="dots"><i></i><i></i><i></i></span> Split Tracker <span class="slot">Stereo Out · slot 8</span></div>
+        <div class="pbanner" id="p-banner" data-state="amber"><span id="p-banner-text">Splits add up to 100% but nobody has confirmed them</span></div>
+        <div class="ptabs"><span class="on">Splits</span><span>Session</span><span>Evidence</span><span>Log</span></div>
+        <div class="pbody">
+          <div class="psong"><span><b>Odo Bɛba</b> · ISRC GH-A1B-26-00042</span><span>Example song</span></div>
+          <div class="ptable-wrap">
+            <table class="ptable">
+              <thead><tr><th>Name</th><th>Role</th><th class="r">Writer</th><th class="r">Master</th><th>IPI</th></tr></thead>
+              <tbody id="p-rows"></tbody>
+            </table>
+          </div>
+          <div class="ptotal"><span>Writer total <b id="p-wt" class="ok">100%</b></span><span>Master total <b id="p-mt" class="ok">100%</b></span></div>
+          <div class="pactions">
+            <button class="btn btn-gold" type="button" id="p-confirm">Confirm splits</button>
+            <button class="btn btn-ghost" type="button" id="p-bounce">Bounce the song</button>
+            <button class="btn btn-ghost" type="button" id="p-reset">Reset</button>
+          </div>
+          <div id="p-receipt" hidden></div>
+          <p class="pnote">Try it: bounce before and after confirming. Audio passes through untouched.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <div class="kente" aria-hidden="true"></div>
+
+  <section class="band">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">How it works</p>
+        <h2>From the first session to a proof nobody can rewrite</h2>
+      </div>
+      <div class="steps">
+        <div class="step"><span class="n">1</span><span class="where">In the DAW</span><h3>Tag the tracks</h3><p>Drop Split Tag on each vocal or instrument track and pick who it belongs to. The master plugin sees every tag.</p></div>
+        <div class="step"><span class="n">2</span><span class="where">While you work</span><h3>Sessions get logged</h3><p>Time open, playback, recording, and who was checked in. Every entry is chained to the one before it, so edits show.</p></div>
+        <div class="step"><span class="n">3</span><span class="where">On every bounce</span><h3>A receipt prints</h3><p>Splits at that moment, the people on each track, and an audio fingerprint of the exact file you exported.</p></div>
+        <div class="step"><span class="n">4</span><span class="where">In the cloud</span><h3>Proof gets anchored</h3><p>Only a hash leaves your computer. It is timestamped on a public blockchain, so the date can't be faked later.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band alt">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">What's inside</p>
+        <h2>Built for how songs really get made</h2>
+        <p>Producers hand projects to engineers, writers send demos on WhatsApp, and beats get reused. Split Tracker keeps the record straight through all of it.</p>
+      </div>
+      <div class="features">
+        <div class="feature"><span class="chip live">In the plugin</span><h3>Real split sheets</h3><p>Writer and master shares, role, PRO, IPI/CAE, publisher. Both totals must hit 100% before the banner turns green.</p></div>
+        <div class="feature"><span class="chip live">In the plugin</span><h3>Bounce reminders</h3><p>Every offline export is caught. If splits aren't confirmed, a pop-up says so and the bounce is logged anyway.</p></div>
+        <div class="feature"><span class="chip live">In the plugin</span><h3>Printable receipts</h3><p>A receipt is saved after each bounce with signature lines, ready to print or keep as PDF.</p></div>
+        <div class="feature"><span class="chip live">In the plugin</span><h3>Audio fingerprint</h3><p>Matches a WhatsApp MP3 or a streaming rip back to your bounce, even after mastering. Tested at 88–100% on copies.</p></div>
+        <div class="feature"><span class="chip soon">Artist portal</span><h3>Sign off by phone</h3><p>Each writer approves their own share with a one-time SMS code. The approval goes on the record.</p></div>
+        <div class="feature"><span class="chip soon">Cloud</span><h3>Theft watch</h3><p>Released songs are scanned against your fingerprints. Matches are flagged to every writer on the split.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap proof">
+      <div class="sec-head" style="margin:0">
+        <p class="eyebrow">Evidence</p>
+        <h2>If there's a dispute, the record speaks</h2>
+        <p>Each log entry stores a SHA-256 hash of the entry before it. Delete or change one line and the chain breaks at that exact spot. The daily summary hash is anchored to Bitcoin through OpenTimestamps, so the date is public and permanent.</p>
+        <p>Names, splits and IPI numbers never go on the chain. Only the hash does.</p>
+        <div><a class="btn btn-ghost" href="#verify" style="margin-top:8px">Check a receipt</a></div>
+      </div>
+      <div class="chain" aria-label="Example hash chain">
+        <div class="link"><span>#118</span><span>14:02 · SESSION · Kofi checked in</span><span>hash</span><code>9f2c…41ab</code></div>
+        <div class="arrow">↓</div>
+        <div class="link"><span>#119</span><span>15:47 · BOUNCE #3 · splits confirmed</span><span>hash</span><code>3d07…e9c2</code></div>
+        <div class="arrow">↓</div>
+        <div class="link"><span>#120</span><span>15:47 · FINGER · 41,208 frames</span><span>hash</span><code>b81e…07fd</code></div>
+        <div class="arrow">↓</div>
+        <div class="link anchor"><span>Anchor</span><span>Bitcoin block 921,407 · 12 Nov 2026</span><span>root</span><code>e4a9…5c10</code></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band alt">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">Your data</p>
+        <h2>What we record, in plain words</h2>
+      </div>
+      <div class="privacy">
+        <div class="col">
+          <h3>What you see in the plugin and portal</h3>
+          <ul>
+            <li>Splits, roles and registration numbers</li>
+            <li>Session time and who was checked in</li>
+            <li>Bounces, receipts and approvals</li>
+          </ul>
+        </div>
+        <div class="col">
+          <h3>What we also keep, for evidence</h3>
+          <ul>
+            <li>The full tamper-evident log of every change</li>
+            <li>Which computer opened the project, and when</li>
+            <li>Downloads of project files and receipts</li>
+            <li>Audio fingerprints of each bounce (not the audio)</li>
+          </ul>
+        </div>
+        <p class="law">All of this is listed in our privacy policy under Ghana's Data Protection Act, 2012 (Act 843). You can ask for a copy of everything we hold about you.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="register">
+    <div class="wrap">
+      <div>
+        <h2>No IPI number yet?</h2>
+        <p>Writers without a registration get flagged in the plugin. Our registration service sets you up with GHAMRO and gets your IPI, so your share can be paid.</p>
+      </div>
+      <a class="btn btn-gold" href="https://example.com/register" target="_blank" rel="noopener">Register your songs</a>
+    </div>
+  </section>
+</main>
+
+<!-- ================= ARTIST PORTAL ================= -->
+<main id="view-artists" data-view-panel="artists" hidden>
+  <div class="demo-note"><div class="wrap">Preview with example songs and people. Signed in as an example writer.</div></div>
+  <div class="wrap app">
+    <aside class="panel">
+      <div class="me"><span class="avatar">AS</span><div><b>Ama Serwaa</b><small>Writer · GHAMRO · IPI 00731 552 018</small></div></div>
+      <div class="stats">
+        <div><b class="num" id="st-songs">4</b><span>Songs</span></div>
+        <div><b class="num" id="st-hours">61h</b><span>In sessions</span></div>
+        <div><b class="num" id="st-pending">1</b><span>To approve</span></div>
+      </div>
+      <ul class="songlist" id="songlist"></ul>
+    </aside>
+    <section class="detail" id="detail"></section>
+  </div>
+</main>
+
+<!-- ================= VERIFY ================= -->
+<main id="view-verify" data-view-panel="verify" hidden>
+  <div class="demo-note"><div class="wrap">Preview. Results below are simulated; the real check runs the same fingerprint as the plugin.</div></div>
+  <div class="wrap">
+    <div class="sec-head" style="margin:36px 0 0">
+      <p class="eyebrow">Verify</p>
+      <h2>Is this our song?</h2>
+      <p>Drop a song you found online, or paste the receipt hash from a bounce receipt. We'll compare it with the record.</p>
+    </div>
+  </div>
+  <div class="wrap verify">
+    <div style="display:grid;gap:18px;min-width:0">
+      <div class="drop" id="drop">
+        <span class="big">Drop an audio file</span>
+        <p>MP3, WAV, AAC or a voice note. The file stays in your browser; only its fingerprint would be sent.</p>
+        <label class="btn btn-ghost" for="file">Choose a file<input id="file" type="file" accept="audio/*" hidden></label>
+        <div class="samples">
+          <button class="btn btn-ghost btn-small" type="button" data-sample="same">Try: WhatsApp copy</button>
+          <button class="btn btn-ghost btn-small" type="button" data-sample="maybe">Try: same beat, new song</button>
+          <button class="btn btn-ghost btn-small" type="button" data-sample="none">Try: unrelated song</button>
+        </div>
+      </div>
+      <form class="field" id="hash-form">
+        <label for="hash-in">Or paste a receipt hash</label>
+        <div class="row">
+          <input id="hash-in" placeholder="e.g. 3d07a1…e9c2" autocomplete="off">
+          <button class="btn btn-gold" type="submit">Check</button>
+        </div>
+      </form>
+    </div>
+    <div class="panel" id="verify-out">
+      <div class="empty"><h3 style="color:var(--fg)">Results show here</h3><p>Pick one of the sample files to see what a match, a possible match and no match look like.</p></div>
+    </div>
+  </div>
+</main>
+
+<footer><div class="wrap"><span>Split Tracker by TBA · preview build</span><span>Privacy policy · Terms · Act 843 data requests</span></div></footer>
+
+<div class="scrim" id="otp-modal" hidden role="dialog" aria-modal="true" aria-labelledby="otp-title">
+  <div class="phone">
+    <h3 id="otp-title">Approve your split</h3>
+    <div class="sms"><small>SMS from SPLITTRK · now</small><span id="otp-sms"></span></div>
+    <p style="font-size:.88rem;color:var(--muted)">Enter the 6-digit code to sign. It records your phone, the time and this exact version of the split.</p>
+    <div class="otp" id="otp-boxes"></div>
+    <p class="err" id="otp-err" aria-live="polite"></p>
+    <div class="row"><button class="btn btn-ghost" type="button" id="otp-cancel" style="flex:1">Cancel</button><button class="btn btn-green" type="button" id="otp-ok" style="flex:1">Sign</button></div>
+    <p class="fine">Example code for this preview: <b class="mono">482913</b></p>
+  </div>
+</div>
+
+<script>
+(() => {
+  /* ---------- Routing ---------- */
+  const views = ["home", "artists", "verify"];
+  function show() {
+    const v = views.includes(location.hash.slice(1)) ? location.hash.slice(1) : "home";
+    document.querySelectorAll("[data-view-panel]").forEach(p => p.hidden = p.dataset.viewPanel !== v);
+    document.querySelectorAll("nav.links a").forEach(a => { if (a.dataset.view === v) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    window.scrollTo(0, 0);
+  }
+  addEventListener("hashchange", show);
+  show();
+
+  document.getElementById("dl-btn").addEventListener("click", () => document.getElementById("dl-msg").hidden = false);
+
+  /* ---------- Plugin demo ---------- */
+  const people = [
+    { name: "Kwame Asante", role: "Writer", w: 40, m: 0, ipi: "00512 884 301" },
+    { name: "Ama Serwaa", role: "Topliner", w: 30, m: 0, ipi: "00731 552 018" },
+    { name: "Kofi Mensah", role: "Producer", w: 30, m: 70, ipi: "" },
+    { name: "Efua Owusu", role: "Engineer", w: 0, m: 30, ipi: "n/a" },
+  ];
+  let confirmed = false, bounces = 0;
+  const banner = document.getElementById("p-banner"), btext = document.getElementById("p-banner-text");
+  function renderPlugin() {
+    document.getElementById("p-rows").innerHTML = people.map(p =>
+      `<tr><td>${p.name}</td><td>${p.role}</td><td class="r num">${p.w}%</td><td class="r num">${p.m}%</td><td class="mono">${p.ipi ? p.ipi : '<span class="flag">Not registered</span>'}</td></tr>`).join("");
+    banner.dataset.state = confirmed ? "green" : "amber";
+    btext.textContent = confirmed ? "Splits confirmed · ready to bounce" : "Splits add up to 100% but nobody has confirmed them";
+    document.getElementById("p-confirm").disabled = confirmed;
+  }
+  document.getElementById("p-confirm").addEventListener("click", () => { confirmed = true; renderPlugin(); });
+  document.getElementById("p-reset").addEventListener("click", () => { confirmed = false; bounces = 0; document.getElementById("p-receipt").hidden = true; renderPlugin(); });
+  document.getElementById("p-bounce").addEventListener("click", () => {
+    bounces++;
+    const r = document.getElementById("p-receipt");
+    const now = new Date();
+    const t = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const hash = Array.from({ length: 4 }, () => Math.floor(Math.random() * 65536).toString(16).padStart(4, "0")).join("");
+    banner.classList.remove("flash"); void banner.offsetWidth; banner.classList.add("flash");
+    if (!confirmed) {
+      banner.dataset.state = "red";
+      btext.textContent = `Bounce #${bounces} logged without confirmed splits`;
+    }
+    r.innerHTML = `<div class="receipt-pop"><strong>${confirmed ? "Bounce receipt saved" : "Reminder: splits not confirmed"}</strong><br>
+      Bounce #${bounces} · ${t} · Odo Bɛba<br>
+      Splits: ${confirmed ? "confirmed" : "NOT confirmed"} · 4 people · 1 writer not registered<br>
+      Fingerprint ${hash.slice(0, 8)}… · chain head ${hash.slice(8)}…<br>
+      Saved to Documents/Split Tracker Receipts/Odo Bɛba/</div>`;
+    r.hidden = false;
+  });
+  renderPlugin();
+
+  /* ---------- Artist portal ---------- */
+  const songs = [
+    { id: "odo", title: "Odo Bɛba", artist: "Kwame Asante ft. Ama Serwaa", isrc: "GH-A1B-26-00042", iswc: "T-345.672.109-3", studio: "Osu Sound House, Accra",
+      status: "wait", mine: 30, hours: 18.5,
+      splits: [
+        { n: "Kwame Asante", r: "Writer", w: 40, m: 0, pro: "GHAMRO", ipi: "00512 884 301", ok: true },
+        { n: "Ama Serwaa", r: "Topliner", w: 30, m: 0, pro: "GHAMRO", ipi: "00731 552 018", ok: false, me: true },
+        { n: "Kofi Mensah", r: "Producer", w: 30, m: 70, pro: "", ipi: "", ok: true },
+        { n: "Efua Owusu", r: "Engineer", w: 0, m: 30, pro: "", ipi: "", ok: true },
+      ],
+      time: [["Kofi Mensah", 9.2], ["Ama Serwaa", 5.4], ["Kwame Asante", 3.1], ["Efua Owusu", 0.8]],
+      bounces: [["3", "12 Nov 2026 · 15:47", "Splits confirmed · anchored", "3d07a1c4…e9c2"], ["2", "10 Nov 2026 · 22:10", "Splits not confirmed", "a19f0b77…40d1"], ["1", "06 Nov 2026 · 19:32", "Splits incomplete", "77c2e1d0…b8aa"]],
+      log: [["12 Nov 15:47", "BOUNCE", "Bounce #3, splits confirmed by producer"], ["12 Nov 14:02", "SESSION", "Kofi Mensah checked in"], ["11 Nov 20:15", "SPLIT", "Topliner share changed 25% → 30%"], ["10 Nov 22:10", "TRACK", "Lead Vox 2 tagged to Ama Serwaa"], ["06 Nov 18:01", "MACHINE", "Project opened on a new computer (Efua's Mac)"]] },
+    { id: "sika", title: "Sika Nti", artist: "Ama Serwaa", isrc: "GH-A1B-26-00031", iswc: "T-345.661.884-0", studio: "Home studio, Kumasi", status: "ok", mine: 60, hours: 22,
+      splits: [{ n: "Ama Serwaa", r: "Writer", w: 60, m: 50, pro: "GHAMRO", ipi: "00731 552 018", ok: true, me: true }, { n: "DJ Kobby", r: "Producer", w: 40, m: 50, pro: "GHAMRO", ipi: "00688 120 457", ok: true }],
+      time: [["Ama Serwaa", 13.5], ["DJ Kobby", 8.5]],
+      bounces: [["5", "28 Oct 2026 · 01:12", "Splits confirmed · anchored", "c0de41a9…12fe"]],
+      log: [["28 Oct 01:12", "BOUNCE", "Bounce #5 (final master)"], ["27 Oct 23:40", "APPROVE", "Ama Serwaa signed by SMS"], ["27 Oct 23:38", "APPROVE", "DJ Kobby signed by SMS"]] },
+    { id: "nkwa", title: "Nkwa", artist: "The Highlife Collective", isrc: "GH-A1B-26-00017", iswc: "pending", studio: "Osu Sound House, Accra", status: "ok", mine: 15, hours: 9,
+      splits: [{ n: "Yaw Boateng", r: "Writer", w: 45, m: 40, pro: "GHAMRO", ipi: "00402 911 765", ok: true }, { n: "Ama Serwaa", r: "Writer", w: 15, m: 0, pro: "GHAMRO", ipi: "00731 552 018", ok: true, me: true }, { n: "Esi Darko", r: "Writer", w: 40, m: 60, pro: "PRS", ipi: "00599 302 118", ok: true }],
+      time: [["Yaw Boateng", 4], ["Esi Darko", 3.2], ["Ama Serwaa", 1.8]],
+      bounces: [["2", "02 Sep 2026 · 17:20", "Splits confirmed · anchored", "5e88b2d1…aa09"]],
+      log: [["02 Sep 17:20", "BOUNCE", "Bounce #2"], ["01 Sep 12:00", "CHECK", "Found file 'nkwa_final(1).mp3' matched: SAME recording 93%"]] },
+    { id: "adom", title: "Adom (demo)", artist: "Ama Serwaa", isrc: "not assigned", iswc: "not assigned", studio: "Phone voice note → Osu Sound House", status: "bad", mine: 50, hours: 11.5,
+      splits: [{ n: "Ama Serwaa", r: "Writer", w: 50, m: 0, pro: "GHAMRO", ipi: "00731 552 018", ok: false, me: true }, { n: "Nana K.", r: "Writer", w: 30, m: 0, pro: "", ipi: "", ok: false }],
+      time: [["Ama Serwaa", 7], ["Nana K.", 4.5]],
+      bounces: [["1", "18 Oct 2026 · 13:05", "Splits incomplete (80%)", "0b1c77e2…31d4"]],
+      log: [["18 Oct 13:05", "BOUNCE", "Bounce #1, writer total only 80%"], ["18 Oct 12:40", "TRACK", "Guitar tagged to Nana K."]] },
+  ];
+  let current = "odo";
+  const label = { ok: "Signed", wait: "Your approval", bad: "Incomplete" };
+
+  function renderList() {
+    document.getElementById("songlist").innerHTML = songs.map(s =>
+      `<li><button type="button" data-song="${s.id}" aria-pressed="${s.id === current}"><b>${s.title}</b><span class="pill ${s.status}">${label[s.status]}</span><small>${s.artist}</small></button></li>`).join("");
+    document.getElementById("st-pending").textContent = songs.filter(s => s.status === "wait").length;
+  }
+  document.getElementById("songlist").addEventListener("click", e => {
+    const b = e.target.closest("button[data-song]"); if (!b) return;
+    current = b.dataset.song; renderList(); renderDetail();
+  });
+
+  function renderDetail() {
+    const s = songs.find(x => x.id === current);
+    const wt = s.splits.reduce((a, p) => a + p.w, 0), mt = s.splits.reduce((a, p) => a + p.m, 0);
+    const maxT = Math.max(...s.time.map(t => t[1]));
+    const mineRow = s.splits.find(p => p.me);
+    let bar;
+    if (s.status === "ok") bar = `<div class="statusbar ok">Everyone has signed this split. It is anchored on the public record.</div>`;
+    else if (s.status === "wait") bar = `<div class="statusbar wait">Your ${mineRow.w}% writer share is waiting for your signature.<button class="btn btn-green btn-small" type="button" id="approve">Approve my split</button></div>`;
+    else bar = `<div class="statusbar wait">Writer shares add up to ${wt}%. The producer needs to finish the split sheet before anyone can sign.</div>`;
+
+    document.getElementById("detail").innerHTML = `
+      <div class="panel song-hero">
+        <div><p class="eyebrow">${s.artist}</p><h2 style="margin-top:6px">${s.title}</h2></div>
+        <div class="meta"><span>ISRC <b class="mono">${s.isrc}</b></span><span>ISWC <b class="mono">${s.iswc}</b></span><span>Studio <b>${s.studio}</b></span><span>Your share <b>${s.mine}%</b></span></div>
+        ${bar}
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Split sheet</h3><span class="num" style="color:var(--muted);font-size:.86rem">Writer ${wt}% · Master ${mt}%</span></div>
+        <div class="tbl-wrap"><table class="splits">
+          <thead><tr><th>Person</th><th class="r">Writer</th><th class="r">Master</th><th>PRO / IPI</th><th>Signed</th></tr></thead>
+          <tbody>${s.splits.map(p => `<tr class="${p.me ? "mine" : ""}">
+            <td class="who"><b>${p.n}${p.me ? " (you)" : ""}</b><small>${p.r}</small></td>
+            <td class="r num">${p.w}%<span class="bar"><i style="width:${p.w}%"></i></span></td>
+            <td class="r num">${p.m}%</td>
+            <td class="mono">${p.ipi ? `${p.pro} · ${p.ipi}` : (p.w > 0 ? '<span style="color:var(--red);font-family:var(--font-body);font-weight:600">Not registered</span>' : '<span style="color:var(--muted)">n/a</span>')}</td>
+            <td>${p.ok ? '<span class="pill ok">Signed</span>' : '<span class="pill wait">Waiting</span>'}</td></tr>`).join("")}</tbody>
+        </table></div>
+      </div>
+      <div class="two">
+        <div class="panel">
+          <div class="panel-head"><h3>Time on this song</h3><span class="num" style="color:var(--muted);font-size:.86rem">${s.hours}h total</span></div>
+          <div class="sessions">${s.time.map(t => `<div class="srow"><span>${t[0]}</span><span class="num" style="color:var(--muted)">${t[1]}h</span><span class="track"><i style="width:${(t[1] / maxT * 100).toFixed(0)}%"></i></span></div>`).join("")}</div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Recent log</h3><span style="color:var(--muted);font-size:.8rem">Chain intact ✓</span></div>
+          <ul class="timeline" id="log">${s.log.map(l => `<li><time>${l[0]}</time><span><span class="tag">${l[1]}</span>${l[2]}</span></li>`).join("")}</ul>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Bounces &amp; receipts</h3></div>
+        <div class="bounces">${s.bounces.map(b => `<div class="bounce"><span class="no">#${b[0]}</span><div><b>${b[1]}</b><br><code>${b[2]} · receipt ${b[3]}</code></div><a class="btn btn-ghost btn-small" href="#verify">Verify</a></div>`).join("")}</div>
+      </div>`;
+    const ap = document.getElementById("approve");
+    if (ap) ap.addEventListener("click", openOtp);
+  }
+
+  /* OTP modal */
+  const modal = document.getElementById("otp-modal"), boxes = document.getElementById("otp-boxes");
+  boxes.innerHTML = Array.from({ length: 6 }, (_, i) => `<input id="otp-${i}" inputmode="numeric" maxlength="1" aria-label="Digit ${i + 1}">`).join("");
+  const inputs = [...boxes.querySelectorAll("input")];
+  inputs.forEach((inp, i) => {
+    inp.addEventListener("input", () => { inp.value = inp.value.replace(/\D/g, "").slice(-1); if (inp.value && inputs[i + 1]) inputs[i + 1].focus(); });
+    inp.addEventListener("keydown", e => { if (e.key === "Backspace" && !inp.value && inputs[i - 1]) inputs[i - 1].focus(); if (e.key === "Enter") signOtp(); });
+    inp.addEventListener("paste", e => { const d = (e.clipboardData.getData("text") || "").replace(/\D/g, "").slice(0, 6); if (d.length) { e.preventDefault(); d.split("").forEach((c, k) => inputs[k] && (inputs[k].value = c)); inputs[Math.min(d.length, 5)].focus(); } });
+  });
+  function openOtp() {
+    const s = songs.find(x => x.id === current);
+    document.getElementById("otp-sms").textContent = `Your Split Tracker code is 482913. You are signing ${s.mine}% writer share of "${s.title}".`;
+    inputs.forEach(i => i.value = ""); document.getElementById("otp-err").textContent = "";
+    modal.hidden = false; inputs[0].focus();
+  }
+  function closeOtp() { modal.hidden = true; }
+  function signOtp() {
+    const code = inputs.map(i => i.value).join("");
+    if (code.length < 6) { document.getElementById("otp-err").textContent = "Enter all 6 digits from the SMS."; return; }
+    if (code !== "482913") { document.getElementById("otp-err").textContent = "That code doesn't match. Check the SMS and try again."; return; }
+    const s = songs.find(x => x.id === current);
+    s.splits.find(p => p.me).ok = true;
+    if (s.splits.every(p => p.ok)) { s.status = "ok"; }
+    const d = new Date(), t = `${String(d.getDate()).padStart(2, "0")} ${d.toLocaleString("en-GB", { month: "short" })} ${d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+    s.log.unshift([t, "APPROVE", "Ama Serwaa signed by SMS · +233 24 ••• ••18"]);
+    closeOtp(); renderList(); renderDetail();
+  }
+  document.getElementById("otp-ok").addEventListener("click", signOtp);
+  document.getElementById("otp-cancel").addEventListener("click", closeOtp);
+  modal.addEventListener("click", e => { if (e.target === modal) closeOtp(); });
+  addEventListener("keydown", e => { if (e.key === "Escape" && !modal.hidden) closeOtp(); });
+
+  renderList(); renderDetail();
+
+  /* ---------- Verify ---------- */
+  const out = document.getElementById("verify-out");
+  const results = {
+    same: { cls: "same", score: 93, head: "Same recording", sub: "This file is a copy of a sealed bounce.", file: "Odo Beba (WhatsApp Audio).mp3", song: "Odo Bɛba · bounce #3", cov: 96, date: "12 Nov 2026 · 15:47", anchor: "Bitcoin block 921,407", color: "var(--green)",
+      next: "Every writer on the split can download this match report as evidence." },
+    maybe: { cls: "maybe", score: 73, head: "Possible match", sub: "Shares material with a bounce, such as the same beat or sample. Listen and compare.", file: "new_single_master.wav", song: "Odo Bɛba · bounce #2", cov: 58, date: "10 Nov 2026 · 22:10", anchor: "Bitcoin block 921,102", color: "var(--amber)",
+      next: "A partial match isn't proof on its own. Open a case and we'll compare the sections with you." },
+    none: { cls: "none", score: 0, head: "No match", sub: "This audio doesn't match any song on record.", file: "random_song.mp3", song: "none", cov: 0, date: "", anchor: "", color: "var(--muted)", next: "If you wrote this song, add Split Tracker to the project so the next bounce is on record." },
+  };
+  function showResult(k, fileName) {
+    const r = results[k];
+    out.innerHTML = `<div class="result ${r.cls}">
+      <p class="eyebrow">Result</p>
+      <div class="verdict"><span class="score num">${r.score ? r.score + "%" : "—"}</span><div><h3>${r.head}</h3><p style="color:var(--muted);font-size:.9rem">${r.sub}</p></div></div>
+      <div class="meter" aria-hidden="true"><i style="width:${r.score}%;background:${r.color}"></i></div>
+      <dl class="kv">
+        <dt>File</dt><dd class="mono">${fileName || r.file}</dd>
+        <dt>Matched</dt><dd>${r.song}</dd>
+        ${r.cov ? `<dt>Coverage</dt><dd class="num">${r.cov}% of the file</dd><dt>Bounced</dt><dd>${r.date}</dd><dt>Anchored</dt><dd>${r.anchor}</dd>` : ""}
+      </dl>
+      <p style="font-size:.9rem">${r.next}</p>
+    </div>`;
+  }
+  document.querySelectorAll("[data-sample]").forEach(b => b.addEventListener("click", () => showResult(b.dataset.sample)));
+  const drop = document.getElementById("drop");
+  ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+  drop.addEventListener("drop", e => { const f = e.dataTransfer.files[0]; if (f) showResult(/whatsapp|odo/i.test(f.name) ? "same" : "none", f.name); });
+  document.getElementById("file").addEventListener("change", e => { const f = e.target.files[0]; if (f) showResult(/whatsapp|odo/i.test(f.name) ? "same" : "none", f.name); });
+  document.getElementById("hash-form").addEventListener("submit", e => {
+    e.preventDefault();
+    const v = document.getElementById("hash-in").value.trim().toLowerCase();
+    if (!v) { out.innerHTML = `<div class="empty"><h3 style="color:var(--fg)">Paste a hash first</h3><p>It's printed at the bottom of every bounce receipt, under "Receipt hash".</p></div>`; return; }
+    if (v.startsWith("3d07")) {
+      out.innerHTML = `<div class="result same"><p class="eyebrow">Receipt</p>
+        <div class="verdict"><span class="score">✓</span><div><h3>Receipt is genuine</h3><p style="color:var(--muted);font-size:.9rem">It matches the public record and hasn't been changed.</p></div></div>
+        <dl class="kv"><dt>Song</dt><dd>Odo Bɛba · bounce #3</dd><dt>Bounced</dt><dd>12 Nov 2026 · 15:47</dd><dt>Anchored</dt><dd>Bitcoin block 921,407 (OpenTimestamps)</dd><dt>Splits</dt><dd>4 people · confirmed</dd></dl></div>`;
+    } else {
+      out.innerHTML = `<div class="result none"><p class="eyebrow">Receipt</p><div class="verdict"><span class="score">✗</span><div><h3>Not on record</h3><p style="color:var(--muted);font-size:.9rem">No receipt has this hash. Check for a typo, or the receipt may have been edited. Try one that starts with 3d07.</p></div></div></div>`;
+    }
+  });
+})();
+</script>

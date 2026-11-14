@@ -1,0 +1,871 @@
+<title>Split Tracker Web</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a dark studio-lit landing page whose hero is the plugin's own split disc,
+   and a light, table-led workspace behind the sign-in for the business side. */
+:root{
+  color-scheme:dark;
+  --ink:#0d0d0f; --bg:#151517; --panel:#1e1e21; --panel-hi:#29292d; --line:#36363c;
+  --text:#f6f6f7; --dim:#a0a0a8; --good:#1fe04b;
+  --p1:#ecb94b; --p2:#27d6c2; --p3:#6f7dff; --p4:#f2524f; --p5:#b06cf0;
+  --paper:#f3f4f1; --card:#ffffff; --rule:#dcdfd8; --type:#1a1b1d; --mute:#63666b;
+  --ok:#14803a; --ok-bg:#e3f3e7; --wait:#9a5b00; --wait-bg:#fbefd8; --idle-bg:#ebecea;
+  --display:"Inter Tight","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --body:"Inter","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+a.pill,a.btn{text-decoration:none}
+html,body{height:100%}
+body{background:var(--ink);color:var(--text);font:15px/1.55 var(--body);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+:focus-visible{outline:2px solid var(--good);outline-offset:2px}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--display);font-weight:300;margin:0;text-wrap:balance;letter-spacing:-.02em}
+p{margin:0}
+.pill{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:11px 22px;font-weight:500;font-size:14px;white-space:nowrap}
+.pill.white{background:var(--text);color:var(--ink)}
+.pill.ghost{border:1px solid var(--line);color:var(--text)}
+.pill.white:hover{background:#fff}.pill.ghost:hover{border-color:var(--dim)}
+
+/* ---------- landing ---------- */
+.nav{display:flex;align-items:center;gap:24px;padding-block:20px}
+.logo{display:flex;align-items:center;gap:10px;font-family:var(--display);font-size:17px;font-weight:500}
+.logo i{width:20px;height:20px;border-radius:50%;background:conic-gradient(var(--p1) 0 40%,var(--p2) 0 65%,var(--p3) 0 85%,var(--p4) 0);display:block;position:relative}
+.logo i::after{content:"";position:absolute;inset:6px;border-radius:50%;background:var(--ink)}
+.nav .links{display:flex;gap:26px;margin-left:auto;color:var(--dim);font-size:14px}
+.nav .links button:hover{color:var(--text)}
+.nav .pill{padding:8px 16px;font-size:13px}
+
+.hero{display:grid;grid-template-columns:1.05fr 1fr;gap:48px;align-items:center;padding-block:56px 72px}
+.hero h1{font-size:clamp(40px,6vw,68px);line-height:1.04}
+.hero h1 span{color:var(--dim)}
+.hero .sub{color:var(--dim);font-size:17px;max-width:44ch;margin-top:22px}
+.hero .cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+.hero .fine{color:var(--dim);font-size:13px;margin-top:18px}
+
+.stage{display:grid;grid-template-columns:auto 1fr;gap:28px;align-items:center;min-width:0}
+.disc{width:210px;height:210px;position:relative;flex:none}
+.disc .glow,.disc .face{position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 210deg,var(--p1) 0 40%,var(--p2) 40% 65%,var(--p3) 65% 85%,var(--p4) 85% 100%)}
+.disc .glow{filter:blur(34px);opacity:.55;transform:scale(1.08)}
+.disc .clip{position:absolute;inset:0;border-radius:50%;overflow:hidden}
+.disc .face{filter:blur(14px);transform:scale(1.15)}
+.disc .hole{position:absolute;inset:27%;border-radius:50%;background:var(--ink);display:grid;place-items:center;
+  font:300 30px var(--display);letter-spacing:-.02em}
+.rows{display:grid;gap:10px;min-width:0}
+.row{display:flex;align-items:center;gap:12px;background:var(--panel);border-radius:999px;padding:10px 20px 10px 10px;min-width:0}
+.av{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:600;color:var(--ink);flex:none}
+.row .who{min-width:0;flex:1;line-height:1.25}
+.row .who b{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .who small{color:var(--dim);font-size:12px}
+.row .pc{font:300 30px var(--display);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.lockbar{display:flex;align-items:center;gap:14px;margin-top:6px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:8px;background:var(--panel);border-radius:999px;padding:6px 12px;font-size:12px;color:var(--dim)}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--p1)}
+.chip.on{color:var(--text)}.chip.on::before{background:var(--good)}
+
+.hair{height:1px;background:var(--good);opacity:.55;border:0;margin:0}
+section{padding-block:72px}
+.eyebrow{color:var(--dim);font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin-bottom:14px}
+section h2{font-size:clamp(30px,4vw,44px);line-height:1.1;max-width:20ch}
+.lead{color:var(--dim);max-width:60ch;margin-top:16px;font-size:16px}
+
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px}
+.step{background:var(--panel);border-radius:20px;padding:24px;display:grid;gap:10px;align-content:start}
+.step .n{font:300 40px var(--display);color:var(--dim);line-height:1}
+.step h3{font-size:22px;font-weight:400}
+.step p{color:var(--dim);font-size:14px}
+
+.feat{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:20px;overflow:hidden;margin-top:40px}
+.feat div{background:var(--bg);padding:24px;display:grid;gap:8px;align-content:start}
+.feat h3{font-size:19px;font-weight:400}
+.feat p{color:var(--dim);font-size:14px}
+.feat .tag{font:500 11px var(--mono);color:var(--good);letter-spacing:.04em}
+
+.proof{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:40px}
+.shot{background:var(--panel);border-radius:20px;padding:22px;min-width:0}
+.shot h3{font-size:15px;font-family:var(--body);font-weight:500;letter-spacing:0;margin-bottom:16px}
+.lane{display:grid;grid-template-columns:96px 1fr 52px;gap:12px;align-items:center;font-size:13px;padding:7px 0}
+.lane .t{position:relative;height:10px;background:var(--ink);border-radius:999px}
+.lane .t i{position:absolute;top:0;bottom:0;border-radius:999px}
+.lane span:last-child{color:var(--dim);text-align:right;font-variant-numeric:tabular-nums}
+.log{font:12px/1.9 var(--mono);color:var(--dim);overflow-x:auto;white-space:nowrap}
+.log b{color:var(--text);font-weight:500}.log em{color:var(--good);font-style:normal}
+
+.never{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:28px;margin-top:36px}
+.never h3{font-size:19px;font-weight:400;margin-bottom:6px}
+.never p{color:var(--dim);font-size:14px}
+.fits{display:flex;flex-wrap:wrap;gap:10px;margin-top:28px}
+.fits span{border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:13px;color:var(--dim)}
+.fits span.on{color:var(--text);border-color:var(--dim)}
+
+.close{text-align:center;padding-block:96px;position:relative;overflow:hidden}
+.close h2{max-width:none;font-size:clamp(34px,5.4vw,60px)}
+.close .pill{margin-top:30px}
+.close::before{content:"";position:absolute;left:50%;top:50%;width:420px;height:420px;margin:-210px;border-radius:50%;
+  background:conic-gradient(var(--p1),var(--p2),var(--p3),var(--p5),var(--p4),var(--p1));filter:blur(90px);opacity:.22}
+.close > *{position:relative}
+footer{display:flex;flex-wrap:wrap;gap:20px;justify-content:space-between;color:var(--dim);font-size:13px;padding-block:28px}
+footer nav{display:flex;gap:20px}
+
+/* ---------- sign in ---------- */
+#signin{min-height:100%;display:grid;grid-template-columns:1fr 1fr;background:var(--paper);color:var(--type)}
+#signin .brand{background:var(--bg);color:var(--text);padding:48px;display:flex;flex-direction:column;justify-content:space-between;gap:40px;position:relative;overflow:hidden}
+#signin .brand h2{font-size:clamp(28px,3.4vw,42px);max-width:14ch}
+#signin .brand::after{content:"";position:absolute;right:-120px;bottom:-120px;width:360px;height:360px;border-radius:50%;
+  background:conic-gradient(var(--p1),var(--p2),var(--p3),var(--p4),var(--p1));filter:blur(70px);opacity:.35}
+#signin .brand > *{position:relative}
+#signin form{align-self:center;justify-self:center;width:100%;max-width:400px;padding:48px 24px;display:grid;gap:16px}
+#signin form h1{font-size:30px;font-weight:400}
+#signin .muted{color:var(--mute);font-size:14px}
+label{display:grid;gap:6px;font-size:13px;font-weight:500;color:var(--mute)}
+input,select,textarea{font:15px var(--body);color:var(--type);background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:10px 12px;width:100%;min-width:0;color-scheme:light}
+textarea{resize:vertical;min-height:84px}
+.btn{border-radius:8px;padding:10px 16px;font-weight:500;font-size:14px;display:inline-flex;justify-content:center;align-items:center;gap:8px}
+.btn.dark{background:var(--bg);color:var(--text)}.btn.dark:hover{background:var(--ink)}
+.btn.dark:disabled{opacity:.4;cursor:not-allowed}
+.btn.line{border:1px solid var(--rule);background:var(--card);color:var(--type)}
+.btn.link{color:var(--mute);padding:6px 0}
+
+/* ---------- workspace ---------- */
+#shell{min-height:100%;display:grid;grid-template-columns:220px 1fr;background:var(--paper);color:var(--type)}
+.side{background:var(--bg);color:var(--text);padding:20px 12px;display:flex;flex-direction:column;gap:4px}
+.side .logo{padding:6px 10px 18px}
+.side button.tab{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--dim);font-size:14px;text-align:left}
+.side button.tab:hover{color:var(--text)}
+.side button.tab[aria-current="page"]{background:var(--panel-hi);color:var(--text)}
+.side .count{margin-left:auto;font-size:11px;background:var(--good);color:var(--ink);border-radius:999px;padding:1px 7px;font-weight:600}
+.side .foot{margin-top:auto;display:grid;gap:4px}
+.main{min-width:0;padding:24px max(20px,env(safe-area-inset-right,0px)) 40px 24px}
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:22px}
+.top h1{font-size:26px;font-weight:400;margin-right:auto}
+.top .me{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500}
+.top .me .av{width:30px;height:30px;font-size:11px}
+.demo{font-size:12px;color:var(--wait);background:var(--wait-bg);border-radius:999px;padding:4px 10px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:16px}
+.kpi small{color:var(--mute);font-size:13px}
+.kpi b{display:block;font:300 36px/1.15 var(--display);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.cols{display:grid;grid-template-columns:1fr 300px;gap:16px;margin-top:16px;align-items:start}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:10px;min-width:0}
+.card > header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--rule)}
+.card > header h2{font:600 15px var(--body);letter-spacing:0;margin-right:auto}
+.card .pad{padding:16px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+th{font-size:12px;font-weight:500;color:var(--mute);text-align:left;padding:10px 16px;border-bottom:1px solid var(--rule);white-space:nowrap}
+td{padding:11px 16px;border-bottom:1px solid var(--rule);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+td input{padding:6px 8px;font-size:14px}
+td input.share{width:64px;text-align:right}
+.stack{display:flex}.stack .av{width:24px;height:24px;font-size:9px;margin-left:-6px;border:2px solid var(--card)}.stack .av:first-child{margin-left:0}
+.name{display:flex;align-items:center;gap:10px}.name .av{width:28px;height:28px;font-size:10px}
+.st{font-size:12px;font-weight:500;border-radius:999px;padding:3px 10px;white-space:nowrap;display:inline-block}
+.st.ok{background:var(--ok-bg);color:var(--ok)}.st.wait{background:var(--wait-bg);color:var(--wait)}.st.idle{background:var(--idle-bg);color:var(--mute)}
+.feed{display:grid;gap:14px;font-size:13px}
+.feed time{display:block;color:var(--mute);font-size:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.mono{font-family:var(--mono);font-size:12px;color:var(--mute);word-break:break-all}
+.total{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border-top:1px solid var(--rule);font-weight:600;flex-wrap:wrap}
+.total small{font-weight:400;color:var(--wait)}
+.msgs{display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start}
+.thread{display:grid;gap:2px;padding:12px 16px;border-bottom:1px solid var(--rule);text-align:left;width:100%;font-size:14px}
+.thread:last-child{border-bottom:0}.thread small{color:var(--mute)}
+.thread[aria-pressed="true"]{background:var(--paper)}
+.bubble{background:var(--paper);border-radius:10px;padding:12px 14px;font-size:14px;max-width:60ch}
+.bubble.mine{background:var(--bg);color:var(--text);justify-self:end}
+.att{display:flex;align-items:center;gap:10px;border:1px solid var(--rule);border-radius:8px;padding:8px 12px;font-size:13px}
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--bg);color:var(--text);
+  border-radius:999px;padding:10px 18px;font-size:14px;box-shadow:0 8px 30px rgba(0,0,0,.35);z-index:20}
+
+@media (max-width:900px){
+  .hero,.proof,#signin,.cols,.msgs{grid-template-columns:1fr}
+  .steps,.never{grid-template-columns:1fr}
+  .feat{grid-template-columns:1fr 1fr}
+  .kpis{grid-template-columns:1fr 1fr}
+  .nav .links{display:none}.nav .pill{margin-left:auto}
+  #shell{grid-template-columns:1fr}
+  .side{flex-direction:row;overflow-x:auto;padding:10px max(12px,env(safe-area-inset-right,0px)) 10px max(12px,env(safe-area-inset-left,0px));align-items:center}
+  .side .logo{padding:0 8px 0 4px}.side .logo span{display:none}
+  .side button.tab{white-space:nowrap}.side .foot{margin:0 0 0 auto;display:flex}
+  .main{padding:18px max(16px,env(safe-area-inset-right,0px)) 32px max(16px,env(safe-area-inset-left,0px))}
+  #signin .brand{padding:28px 24px}
+}
+@media (max-width:560px){
+  .stage{grid-template-columns:1fr;justify-items:center}.rows{width:100%}
+  .feat,.grid2{grid-template-columns:1fr}
+  .lane{grid-template-columns:72px 1fr 44px}
+}
+@media (prefers-reduced-motion:no-preference){
+  .disc .face{animation:turn 40s linear infinite}
+  @keyframes turn{to{transform:scale(1.15) rotate(360deg)}}
+}
+
+/* ---------- identify and verify ---------- */
+.note{color:var(--mute);font-size:14px;margin:-8px 0 16px;max-width:80ch}
+.cols.even{grid-template-columns:1fr 1fr}
+.drop{display:grid;gap:4px;border:1.5px dashed var(--rule);border-radius:10px;padding:18px;cursor:pointer;color:var(--mute);font-weight:400;font-size:13px;background:var(--paper)}
+.drop b{color:var(--type);font-size:15px;font-weight:600}
+.drop.over{border-color:var(--ok);background:var(--ok-bg)}
+.drop input{border:0;background:none;padding:6px 0 0;font-size:13px}
+.drop code{font-family:var(--mono);font-size:12px}
+.status{font-size:13px;color:var(--mute);min-height:1.4em}
+.status.err{color:#b3261e}
+.st.mel{background:#e9e6fb;color:#4b3fb5}
+.legend{display:grid;gap:10px;font-size:13px;color:var(--mute)}
+.legend .st{margin-right:8px}
+.verdict{border-radius:10px;padding:14px;background:var(--idle-bg);color:var(--mute);font-size:14px}
+.verdict.yes{background:var(--ok-bg);color:var(--ok);font-weight:600}
+.verdict.no{background:#fbe4e2;color:#b3261e;font-weight:600}
+td select{padding:6px 8px;font-size:14px;min-width:150px}
+td .x{color:var(--mute);font-size:13px;text-decoration:underline}
+@media (max-width:900px){.cols.even{grid-template-columns:1fr}}
+
+#libTable,#idTable{min-width:0}
+#libTable td,#libTable th,#idTable td,#idTable th{padding-left:12px;padding-right:12px}
+[data-view="collaborate"] .cols{grid-template-columns:1fr}
+[data-view="collaborate"] #sendForm{max-width:560px}
+#sheet{min-width:820px}
+#sheet td input:not(.share){min-width:140px}
+
+/* ---------- server-backed screens ---------- */
+.banner{background:var(--wait-bg);color:var(--wait);border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:16px}
+.newwork{display:grid;grid-template-columns:1.2fr 1.2fr 1fr auto;gap:8px;border-bottom:1px solid var(--rule)}
+.album{padding:10px 16px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);background:var(--paper);border-bottom:1px solid var(--rule);display:flex;justify-content:space-between}
+.album + .scroll table{min-width:520px}
+.worklink{font-weight:600;text-decoration:underline;text-underline-offset:3px;text-align:left}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--rule)}
+.actions .hint{color:var(--mute);font-size:13px}
+.btn.ok{background:var(--ok);color:#fff}.btn.no{border:1px solid #b3261e;color:#b3261e;background:var(--card)}
+.st.bad{background:#fbe4e2;color:#b3261e}
+#sheet{min-width:1040px}
+#sheet input:disabled,#sheet select:disabled,input:disabled{background:var(--paper);color:var(--mute)}
+#workPick{width:auto;max-width:260px}
+.feed .ty{font:500 11px var(--mono);color:var(--ok);margin-right:6px}
+.bubble small{display:block;font-size:11px;opacity:.7;margin-bottom:2px}
+.thread .st{justify-self:start;margin-top:4px}
+@media (max-width:900px){.newwork{grid-template-columns:1fr}}
+#sheet{min-width:900px}
+#sheet td,#sheet th{padding-left:8px;padding-right:8px}
+#sheet td:first-child,#sheet th:first-child{padding-left:16px}
+#sheet td input:not(.share){min-width:110px}
+#sheet td select{min-width:120px}
+
+.keybox{display:grid;gap:8px;background:var(--ok-bg);border-radius:10px;padding:14px;font-size:14px}
+.keybox code{font-family:var(--mono);font-size:13px;word-break:break-all;background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:10px;user-select:all}
+.evgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--rule);border-bottom:1px solid var(--rule)}
+.evgrid div{background:var(--card);padding:12px 16px}.evgrid small{display:block;color:var(--mute);font-size:12px}.evgrid b{font-weight:600}
+#keyTable{min-width:0}
+@media (max-width:700px){.evgrid{grid-template-columns:1fr 1fr}}
+.keycode{font-family:var(--mono);font-size:12px;word-break:break-all;user-select:all;margin-right:8px}
+
+/* ---------- details and collaborations ---------- */
+.rowlink{font-weight:600;text-decoration:underline;text-underline-offset:3px;text-align:left}
+.loglist{max-height:320px;overflow-y:auto;display:grid;gap:10px;font-size:13px}
+.loglist time{display:block;color:var(--mute);font-size:12px}
+.loglist .ty{font:500 11px var(--mono);color:var(--ok);margin-right:6px}
+.newwork .hint{color:var(--mute);font-size:12px;align-self:center}
+tr.collabform td{background:var(--paper)}
+tr.collabform form{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+tr.collabform input,tr.collabform select{width:auto;flex:1;min-width:140px}
+#fpDetail header .btn{margin-left:8px}
+.st.mel.soft{background:var(--idle-bg);color:#4b3fb5;border:1px dashed #b9b2ec}
+.howto{font-size:13px;color:var(--mute);background:var(--paper);border-radius:8px;padding:10px 12px}
+.howto b{color:var(--type);font-weight:600}
+.wt{display:inline-block;font:600 10px var(--body);letter-spacing:.06em;text-transform:uppercase;border-radius:4px;padding:2px 6px;white-space:nowrap}
+.wt.ev{background:var(--ok);color:#fff}.wt.sl{background:#4b3fb5;color:#fff}.wt.ld{border:1px solid var(--wait);color:var(--wait)}
+.legend .wt{margin-right:8px}
+.legend .untested{border-top:1px solid var(--rule);padding-top:10px;color:var(--type)}
+
+/* ---------- Artist ID and not-yet-available controls ---------- */
+.artistid{font:500 26px var(--mono);letter-spacing:.06em;user-select:all;color:var(--type)}
+/* A feature that is planned but not built: visible, blurred, and not clickable. */
+.soon{position:relative;display:inline-flex;align-items:center}
+.soon > button,.soon > input{filter:blur(1.6px);opacity:.55;pointer-events:none}
+.soon > em{position:absolute;right:-6px;top:-8px;font:600 9px var(--body);letter-spacing:.08em;text-transform:uppercase;font-style:normal;background:var(--bg);color:var(--text);border-radius:999px;padding:2px 6px}
+
+/* ---------- owner, registration details, housekeeping ---------- */
+.evgrid.plain{grid-template-columns:1fr 1fr;border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+.card.danger{border-color:#e6b5b1}
+#regTable{min-width:820px}
+#exportOut{font:12px var(--mono)}
+
+/* Offline receipt upload */
+.howto{margin:0;padding-left:20px;display:grid;gap:6px;max-width:86ch}
+.howto code{font-size:13px;background:var(--idle-bg);border-radius:4px;padding:1px 5px}
+.rczone{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1.5px dashed var(--rule);border-radius:10px;padding:14px}
+.rczone.over{border-color:var(--type);background:var(--idle-bg)}
+.rcopts{display:grid;gap:8px;margin-top:14px}
+.rcopts label{display:block;cursor:pointer}
+.rcopts small{display:block;color:var(--mute);font-size:13px;margin:2px 0 0 22px;max-width:80ch}
+.rcsub{margin-left:22px;display:grid;gap:8px;font-size:14px;color:var(--mute);justify-items:start}
+.rcsub label{color:var(--type)}
+.rcsub small{margin-left:22px}
+.rcopts input[type=radio],.rcopts input[type=checkbox]{display:inline-block;width:auto;height:auto;margin:0 6px 0 0;padding:0;vertical-align:middle;accent-color:var(--type)}
+.rcopts label,.rcsub label{font-size:15px;color:var(--type);font-weight:400;text-transform:none;letter-spacing:0}
+.rcsub select{width:auto;max-width:100%}
+
+</style>
+
+
+<!-- ======================= LANDING ======================= -->
+<div id="site">
+  <div class="wrap">
+    <div class="nav">
+      <div class="logo"><i></i><span>Split Tracker</span></div>
+      <div class="links">
+        <button type="button" data-jump="how">How it works</button>
+        <button type="button" data-jump="features">What it records</button>
+        <button type="button" data-jump="privacy">Privacy</button>
+      </div>
+      <a class="pill ghost" href="#sign-in">Sign in</a>
+      <a class="pill white" href="#sign-up">Sign up</a>
+    </div>
+
+    <div class="hero">
+      <div>
+        <h1>Lock the splits <span>before the song leaves</span> the room.</h1>
+        <p class="sub">Split Tracker sits in your session and keeps the record while you work: who was on which track, for how long, and what share you all agreed.</p>
+        <div class="cta">
+          <a class="pill white" href="https://example.com/register">Get the plugin</a>
+          <a class="pill ghost" href="#sign-up">Create an account</a>
+        </div>
+        <p class="fine">AU and VST3 for Mac. No audio or voice is ever recorded.</p>
+      </div>
+      <div class="stage">
+        <div class="disc" aria-hidden="true"><div class="glow"></div><div class="clip"><div class="face"></div></div><div class="hole">100%</div></div>
+        <div class="rows">
+          <div class="row"><span class="av" style="background:var(--p1)">NK</span><span class="who"><b>Nova Kane</b><small>Artist, writer</small></span><span class="pc">40%</span></div>
+          <div class="row"><span class="av" style="background:var(--p2)">LV</span><span class="who"><b>Lil Vanta</b><small>Featured artist</small></span><span class="pc">25%</span></div>
+          <div class="row"><span class="av" style="background:var(--p3)">DH</span><span class="who"><b>DJ Halcyon</b><small>Producer</small></span><span class="pc">20%</span></div>
+          <div class="row"><span class="av" style="background:var(--p4)">RS</span><span class="who"><b>Riko Santos</b><small>Writer</small></span><span class="pc">15%</span></div>
+          <div class="lockbar">
+            <button type="button" class="pill white" id="heroLock">Lock splits</button>
+            <span class="chip" id="heroChip">Not locked</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <hr class="hair">
+
+  <div class="wrap">
+    <section id="how">
+      <p class="eyebrow">How it works</p>
+      <h2>Three steps, in the order you already work.</h2>
+      <div class="steps">
+        <div class="step"><span class="n">1</span><h3>Put Split Tracker on the master</h3><p>It names the song and starts the session clock the moment you press play.</p></div>
+        <div class="step"><span class="n">2</span><h3>Drop Split Tag on each track</h3><p>Tap the person who is on that track. Every tag links to the master by itself.</p></div>
+        <div class="step"><span class="n">3</span><h3>Agree the shares and lock</h3><p>Shares must total 100% and everyone needs a legal name. Then one button seals it.</p></div>
+      </div>
+    </section>
+  </div>
+  <hr class="hair">
+
+  <div class="wrap">
+    <section id="features">
+      <p class="eyebrow">What it records</p>
+      <h2>Everything a split dispute comes down to.</h2>
+      <p class="lead">The plugin shows you a simple summary. Underneath, it keeps the full record so the summary can be backed up later.</p>
+      <div class="feat">
+        <div><span class="tag">SPLIT</span><h3>Split sheet</h3><p>Artist name and legal name, role, writer and master share, PRO, IPI and publisher for each person.</p></div>
+        <div><span class="tag">TAG</span><h3>Who is on each track</h3><p>Split Tag marks a track with a person, so the session knows whose vocal, beat or guitar it is.</p></div>
+        <div><span class="tag">TAKE</span><h3>Numbered takes</h3><p>Each recording pass is logged with who, when, how long and where in the song it started.</p></div>
+        <div><span class="tag">TIME</span><h3>Session time per person</h3><p>Time played and time recorded, per person and per track, across every session on the song.</p></div>
+        <div><span class="tag">STEM</span><h3>Stem fingerprints</h3><p>When you bounce, each tagged track gets its own audio fingerprint, filed under the right artist.</p></div>
+        <div><span class="tag">BOUNCE</span><h3>Bounce receipt</h3><p>One receipt per bounce, listing the master, its stems, the takes and the splits at that moment.</p></div>
+        <div><span class="tag">PROJECT</span><h3>Project-file signature</h3><p>Sign the Logic, FL Studio or any other project file, so you can show which version was yours.</p></div>
+        <div><span class="tag">LOG</span><h3>Tamper-evident log</h3><p>Every entry is chained to the one before it. Change one line and the chain no longer checks out.</p></div>
+        <div><span class="tag">IDENTIFY</span><h3>Identify a track</h3><p>Sign up, drop in any audio, and see which of your masters or stems it is. Your plugin fills the library for you.</p></div>
+      </div>
+
+      <div class="proof">
+        <div class="shot">
+          <h3>Session, by track</h3>
+          <div class="lane"><span>Lead Vox</span><span class="t"><i style="left:6%;width:28%;background:var(--p1)"></i><i style="left:52%;width:30%;background:var(--p1)"></i></span><span>3 takes</span></div>
+          <div class="lane"><span>Feature</span><span class="t"><i style="left:38%;width:22%;background:var(--p2)"></i></span><span>2 takes</span></div>
+          <div class="lane"><span>808 Drums</span><span class="t"><i style="left:0;width:92%;background:var(--p3)"></i></span><span>1 take</span></div>
+          <div class="lane"><span>Guitar</span><span class="t"><i style="left:20%;width:14%;background:var(--p4)"></i><i style="left:70%;width:18%;background:var(--p4)"></i></span><span>4 takes</span></div>
+        </div>
+        <div class="shot">
+          <h3>Log</h3>
+          <div class="log">
+            <div>21:04:12 &nbsp;<b>TAKE</b> &nbsp;#3 Lead Vox · Nova Kane · 0:48 at bar 17 &nbsp;<em>9f2c…a71e</em></div>
+            <div>21:19:40 &nbsp;<b>LOCK</b> &nbsp;splits locked at 100% &nbsp;<em>41b8…03d5</em></div>
+            <div>21:22:05 &nbsp;<b>BOUNCE</b> &nbsp;Night Signal · 3:12 &nbsp;<em>c6e0…7b9a</em></div>
+            <div>21:22:08 &nbsp;<b>STEM</b> &nbsp;Lead Vox → Nova Kane &nbsp;<em>d13f…52c4</em></div>
+            <div>21:22:08 &nbsp;<b>STEM</b> &nbsp;808 Drums → DJ Halcyon &nbsp;<em>77aa…e810</em></div>
+            <div>21:25:31 &nbsp;<b>PROJECT</b> &nbsp;Night Signal.logicx signed &nbsp;<em>0be4…9c26</em></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <hr class="hair">
+
+  <div class="wrap">
+    <section id="privacy">
+      <p class="eyebrow">Privacy</p>
+      <h2>It keeps records. It does not listen.</h2>
+      <div class="never">
+        <div><h3>No voice recognition</h3><p>People are tagged by hand. Nothing tries to identify anyone from how they sound.</p></div>
+        <div><h3>Your audio stays put</h3><p>If you link an account, the plugin uploads your records and fingerprints. A fingerprint is a code worked out from the sound; the sound itself is never copied or sent.</p></div>
+        <div><h3>Works without internet</h3><p>No connection in the studio? The plugin saves one receipt file. Send it to the song's owner, who uploads it after signing in to register the song. It carries records and fingerprints, never audio.</p></div>
+        <div><h3>Everything is disclosed</h3><p>The privacy policy lists every item the plugin stores, including the detail the screen does not show.</p></div>
+      </div>
+      <div class="fits">
+        <span class="on">Mac · AU</span><span class="on">Mac · VST3</span><span class="on">Tested in Logic Pro</span><span>Windows · planned</span>
+      </div>
+    </section>
+  </div>
+  <hr class="hair">
+
+  <div class="close">
+    <div class="wrap">
+      <h2>Every song deserves a clean split.</h2>
+      <a class="pill white" href="https://example.com/register">Get the plugin</a>
+    </div>
+  </div>
+  <div class="wrap">
+    <footer>
+      <div class="logo"><i></i><span>Split Tracker</span></div>
+      <nav><span>Privacy</span><span>Terms</span><span>Support</span><span>Contact</span></nav>
+    </footer>
+  </div>
+</div>
+
+<!-- ======================= SIGN IN ======================= -->
+<div id="signin" hidden>
+  <div class="brand">
+    <a class="logo" href="#home" style="color:inherit;text-decoration:none"><i></i><span>Split Tracker</span></a>
+    <h2>Rights and split management for music teams.</h2>
+    <p style="color:var(--dim);font-size:14px">Your profile, your collaborators and every signed split sheet in one place.</p>
+  </div>
+  <form id="authForm" novalidate>
+    <h1 id="authTitle">Sign in to your account</h1>
+    <p class="muted" id="authNote"></p>
+    <div id="regFields" hidden style="display:grid;gap:16px">
+      <label for="au-artist">Artist name<input id="au-artist" autocomplete="nickname" maxlength="80"></label>
+      <label for="au-legal">Legal name<input id="au-legal" autocomplete="name" maxlength="120"></label>
+    </div>
+    <label for="au-email">Email<input id="au-email" type="email" autocomplete="username" placeholder="you@studio.com"></label>
+    <label for="au-pass">Password<input id="au-pass" type="password" autocomplete="current-password"></label>
+    <div id="authError" class="status err" role="alert"></div>
+    <button class="btn dark" type="submit" id="authSubmit">Sign in</button>
+    <button class="btn line" type="button" id="authSwitch">Create an account</button>
+    <a class="btn link" href="#home">Back to the site</a>
+  </form>
+</div>
+
+<!-- ======================= WORKSPACE ======================= -->
+<div id="shell" hidden>
+  <div class="side">
+    <div class="logo"><i></i><span>Split Tracker</span></div>
+    <button class="tab" type="button" data-go="dashboard">Overview</button>
+    <button class="tab" type="button" data-go="collaborate">Split sheets</button>
+    <button class="tab" type="button" data-go="identify">Identify</button>
+    <button class="tab" type="button" data-go="verify">Verify</button>
+    <button class="tab" type="button" data-go="messages">Messages</button>
+    <button class="tab" type="button" data-go="profile">Profile</button>
+    <div class="foot"><button class="tab" type="button" id="signOut">Sign out</button></div>
+  </div>
+
+  <div class="main">
+    <p class="banner" id="previewBanner" hidden>Preview with example people. Nothing here is saved or sent. Identify and Verify work for real.</p>
+
+    <!-- Overview -->
+    <div data-view="dashboard" hidden>
+      <div class="top"><h1 id="hello">Overview</h1><span class="me" id="meChip"></span></div>
+      <div class="kpis" id="kpis"></div>
+      <div class="cols">
+        <div class="card">
+          <header><h2>Your songs</h2></header>
+          <form class="pad newwork" id="newWork">
+            <input id="nwTitle" placeholder="Song title" aria-label="Song title" maxlength="120">
+            <input id="nwAlbum" placeholder="Album (leave empty for a single)" aria-label="Album" maxlength="120" list="albumList">
+            <select id="nwCopy" aria-label="Start from the split of"></select>
+            <button class="btn dark" type="submit">Add song</button>
+            <input id="nwCollab" placeholder="Collaborator's artist name (optional)" aria-label="Collaborator artist name" maxlength="80">
+            <input id="nwCollabEmail" placeholder="Their Artist ID or email" aria-label="Collaborator Artist ID or email" maxlength="254">
+            <select id="nwCollabRole" aria-label="Collaborator role"></select>
+            <span class="hint">Collaborators sign up first and give you their Artist ID. Shares are set on the split sheet.</span>
+            <datalist id="albumList"></datalist>
+          </form>
+          <div id="worksByAlbum"></div>
+        </div>
+        <div class="card">
+          <header><h2>Activity</h2></header>
+          <div class="pad feed" id="activity"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px" id="receiptCard">
+        <header><h2>Upload an offline receipt</h2><span class="st idle">For studios with no internet</span></header>
+        <div class="pad">
+          <p style="margin:0 0 10px;max-width:86ch">The plugin normally sends its records to your account by itself. When the studio computer is offline, or is not linked to an account, the same records can travel as one file instead.</p>
+          <ol class="howto">
+            <li><b>Tag the tracks first.</b> Split Tag goes on every track, with the artist who performed it chosen. Untagged tracks are not credited to anyone.</li>
+            <li><b>In the plugin</b>, open the Evidence tab and press <b>Save offline receipt</b>. It saves one file ending in <code>.splitreceipt</code>.</li>
+            <li><b>Send the file to the song's owner</b> by email, WhatsApp, AirDrop or a USB stick. If you are the owner, carry it to any computer that is online.</li>
+            <li><b>The owner uploads it here</b> and chooses what to do with it. You see everything in the file before anything is saved.</li>
+          </ol>
+          <p style="color:var(--mute);font-size:13px;margin:10px 0 14px;max-width:86ch">A receipt holds the split, the session records, the tamper-evident log and the fingerprints. It never holds audio. The website checks the file is whole and re-checks the log. Who made it is what the file says, so it is shown as "offline receipt" on the song. Once that computer is online and syncs by itself, the live record replaces the receipt.</p>
+          <div class="rczone" id="rcZone">
+            <button class="btn dark" type="button" id="rcPick">Choose a receipt file</button>
+            <span style="color:var(--mute);font-size:13px">or drop it here</span>
+            <input type="file" id="rcFile" accept=".splitreceipt,.json,application/json" hidden>
+          </div>
+          <p id="rcOffline" class="hint" hidden style="color:var(--mute);font-size:13px;margin-top:8px">This is the preview. You can open a receipt to look inside it; saving it needs the server.</p>
+
+          <div id="rcPreview" hidden style="margin-top:16px">
+            <div id="rcSummary"></div>
+            <div class="rcopts">
+              <label><input type="radio" name="rcMode" id="rcModeNew" checked> <b>Register as a new song</b><small>Creates the song with the split and records in this receipt. If the receipt already belongs to a song on the website, it is added there instead.</small></label>
+              <div id="rcNewOpts" class="rcsub">
+                <span id="rcOwnerNamed"></span>
+                <label id="rcOwnerWrap"><input type="checkbox" id="rcIAmOwner"> I am the owner of this song</label>
+              </div>
+              <label><input type="radio" name="rcMode" id="rcModeAdd"> <b>Add to one of my songs</b><small>For a collaborator's separate project. Its tracks, takes and bounces are added beside yours, labelled as theirs. Nothing of yours is replaced.</small></label>
+              <div id="rcAddOpts" class="rcsub" hidden>
+                <select id="rcWork" aria-label="Song to add it to"></select>
+                <span id="rcNoSongs" hidden>You have no songs yet, so register it as a new song.</span>
+                <label><input type="checkbox" id="rcUseSplit"> Also replace that song's split with the one in this receipt <small>Only while the sheet is a draft. Leave off to keep the split as it is.</small></label>
+              </div>
+            </div>
+            <div class="actions" style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn dark" type="button" id="rcGo">Upload and register the song</button>
+              <button class="btn line" type="button" id="rcCancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Split sheets -->
+    <div data-view="collaborate" hidden>
+      <div class="top"><h1 id="workTitle">Split sheets</h1><select id="workPick" aria-label="Song"></select><span id="sheetState"></span></div>
+      <div class="card" id="noWork" hidden><div class="pad">No songs yet. Add one on the Overview page.</div></div>
+      <div id="workBody">
+        <div class="card">
+          <header><h2>Split sheet</h2><span class="soon"><button class="btn line" type="button" disabled tabindex="-1">Invite by email</button><em>Soon</em></span><button class="btn line" type="button" id="addRow">Add collaborator</button></header>
+          <div class="scroll"><table id="sheet">
+            <thead><tr><th>Artist name</th><th>Legal name</th><th>Email</th><th>Role</th><th class="num">Writer %</th><th class="num">Master %</th><th>Status</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+          <div class="total"><span>Writer <span id="sumW">0</span>% &nbsp;·&nbsp; Master <span id="sumM">0</span>%</span><small id="why"></small></div>
+          <div class="pad actions" id="sheetActions"></div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <header><h2>Owner and song code</h2><span id="ownerTag"></span></header>
+          <div class="pad" style="display:grid;gap:12px">
+            <div class="evgrid plain">
+              <div><small>Owner</small><b id="ownerName"></b></div>
+              <div><small>Song code</small><b><code class="keycode" id="songCode"></code> <button type="button" class="x" id="songCodeCopy">Copy</button></b></div>
+            </div>
+            <p id="ownerHelp" style="color:var(--mute);font-size:14px;max-width:80ch"></p>
+            <form id="ownerForm" style="display:flex;gap:8px;flex-wrap:wrap" hidden>
+              <button class="btn dark" type="button" id="ownerMe">I own this song</button>
+              <input id="ownerId" placeholder="Or the owner's Artist ID" aria-label="Owner's Artist ID" maxlength="20" style="max-width:240px">
+              <button class="btn line" type="submit">Set owner</button>
+            </form>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <header><h2>Registration details</h2></header>
+          <div class="scroll"><table id="regTable">
+            <thead><tr><th>Artist</th><th>Artist ID</th><th>PRO</th><th>IPI</th><th>Publisher</th><th>Publisher IPI</th><th>Deal / notes</th><th class="num">Session time</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+        <div class="card" id="evidenceCard" style="margin-top:16px">
+          <header><h2>From the plugin</h2><span id="evState"></span></header>
+          <div id="evBody"></div>
+        </div>
+        <div class="cols even" style="margin-top:16px">
+          <form class="card" id="fileForm">
+            <header><h2>Song details</h2></header>
+            <div class="pad" style="display:grid;gap:12px">
+              <label for="ffTitle">Song title<input id="ffTitle" maxlength="120"></label>
+              <label for="ffAlbum">Album<input id="ffAlbum" maxlength="120" list="albumList" placeholder="Leave empty for a single"></label>
+              <div class="grid2">
+                <label for="ffIsrc">ISRC<input id="ffIsrc" maxlength="20" placeholder="e.g. US-ABC-26-00001"></label>
+                <label for="ffIswc">ISWC<input id="ffIswc" maxlength="20" placeholder="e.g. T-123.456.789-0"></label>
+              </div>
+              <div><button class="btn line" type="submit" id="ffSave">Save</button></div>
+            </div>
+          </form>
+          <div class="card">
+            <header><h2>History</h2><span id="chain"></span></header>
+            <div class="pad feed" id="history"></div>
+          </div>
+        </div>
+        <form class="card danger" id="deleteForm" style="margin-top:16px" hidden>
+          <header><h2>Delete this song</h2></header>
+          <div class="pad" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input id="deleteTitle" placeholder="Type the song title to confirm" aria-label="Song title to confirm" style="max-width:320px">
+            <button class="btn no" type="submit">Delete song</button>
+            <span style="color:var(--mute);font-size:13px">Removes the sheet, messages and plugin records for everyone. A signed sheet cannot be deleted.</span>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Identify -->
+    <div data-view="identify" hidden>
+      <div class="top"><h1>Identify</h1></div>
+      <p class="note">Files are analysed in this browser. Nothing is uploaded, and no audio is stored: only the fingerprints.</p>
+      <div class="cols even">
+        <div class="card">
+          <header><h2>Your library</h2><button class="btn line" type="button" id="libClear">Clear</button></header>
+          <div class="pad" style="display:grid;gap:12px">
+            <label class="drop" id="libDrop" for="libFiles">
+              <b>Add your masters and stems</b>
+              <span>Drop the <code>.fingerprint</code> files from a bounce receipt folder, or audio files of your own.</span>
+              <input id="libFiles" type="file" multiple accept=".fingerprint,audio/*">
+            </label>
+            <div id="libStatus" class="status" role="status"></div>
+          </div>
+          <div class="scroll"><table id="libTable">
+            <thead><tr><th>Name</th><th>Kind</th><th class="num">Length</th><th>Source</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <header><h2>Identify a sound</h2></header>
+          <div class="pad" style="display:grid;gap:12px">
+            <label class="drop" id="idDrop" for="idFile">
+              <b>Drop the audio you want to check</b>
+              <span>A release, a snippet from a video, a stem someone sent you, or a recording of a melody.</span>
+              <input id="idFile" type="file" accept="audio/*,video/*">
+            </label>
+            <div id="idStatus" class="status" role="status"></div>
+            <div id="idSha" class="mono"></div>
+          </div>
+          <div class="scroll"><table id="idTable" hidden>
+            <thead><tr><th>Reference</th><th>Result</th><th>Weight</th><th class="num">Recording</th><th class="num">Found at</th><th class="num">Melody</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+      </div>
+      <div class="card" id="fpDetail" hidden style="margin-top:16px">
+        <header><h2 id="fdTitle"></h2><span id="fdKind"></span><button class="btn line" type="button" id="fdClose">Close</button></header>
+        <div id="fdBody"></div>
+      </div>
+      <div class="card" style="margin-top:16px"><div class="pad legend">
+        <div><span class="st ok">Same recording</span><span class="wt ev">Evidence</span> The audio itself matches: a copy, a re-encode or an excerpt of your bounce or stem.</div>
+        <div><span class="st wait">Shares material</span><span class="wt ld">Lead</span> Part of it matches. It may be a copy, or a different song using the same beat or sample. Listen before relying on it.</div>
+        <div><span class="st mel">Same melody</span><span class="wt sl">Strong lead</span> The notes match even though the recording differs: pitched up or down, sped up or slowed down. On real songs this was right 95% of the time and never matched a different song. It needs at least 20 seconds and an audio reference.</div>
+        <div><span class="st mel soft">Possibly the same melody</span><span class="wt ld">Lead</span> A weaker match, or a clip under 20 seconds. Shown for the single closest song only. This is also what a single stem inside a full mix shows as: in tests it was found 17 times out of 22, with a wrong song coming up 1.6% of the time.</div>
+        <div class="untested"><b id="melodyUntested"></b> Treat any melody result on a cover as unproven until that is measured.</div>
+      </div></div>
+    </div>
+
+    <!-- Verify -->
+    <div data-view="verify" hidden>
+      <div class="top"><h1>Verify</h1></div>
+      <p class="note">Choose a project or an exported file and it is cross-checked against every signature your plugin has made. The file is read in this browser and never uploaded.</p>
+      <div class="cols even">
+        <div class="card">
+          <header><h2>Exported file or project file</h2></header>
+          <div class="pad" style="display:grid;gap:12px">
+            <label class="drop" for="vfFile"><b>Choose a file</b><span>A sealed export, a single-file project such as .flp or .als, or a zipped project folder. You can also copy the file in Finder and paste it here.</span><input id="vfFile" type="file"></label>
+            <label class="drop" for="vfFolder"><b>Or choose a project folder</b><span>For projects that are ordinary folders.</span><input id="vfFolder" type="file" webkitdirectory></label>
+            <p class="howto"><b>Logic project (.logicx)?</b> Right-click it in Finder, choose <b>Compress</b>, then choose the .zip above. Dragging the .logicx onto this page also works in most browsers.</p>
+            <div id="vfStatus" class="status" role="status"></div>
+            <div id="vfSha" class="mono"></div>
+          </div>
+        </div>
+        <div class="card">
+          <header><h2>Result</h2></header>
+          <div class="pad" style="display:grid;gap:12px">
+            <div id="vfVerdict" class="verdict">Choose a file.</div>
+            <label for="vfExpect">Or compare with a code from a paper receipt<input id="vfExpect" placeholder="Paste the 64-character SHA-256" autocomplete="off" spellcheck="false"></label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div data-view="messages" hidden>
+      <div class="top"><h1>Messages</h1></div>
+      <div class="msgs">
+        <div class="card" id="threads"></div>
+        <div class="card">
+          <header><h2 id="threadTitle">Choose a song</h2></header>
+          <div class="pad" style="display:grid;gap:12px" id="chat"></div>
+          <form class="pad" id="chatForm" style="display:flex;gap:10px;border-top:1px solid var(--rule)">
+            <input id="chatText" placeholder="Write a message to everyone on this song" aria-label="Message" maxlength="2000">
+            <button class="btn dark" type="submit">Send</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile -->
+    <div data-view="profile" hidden>
+      <div class="top"><h1>Profile</h1></div>
+      <form class="card" id="profileForm">
+        <header><h2>Personal details and affiliations</h2></header>
+        <div class="pad" style="display:grid;gap:14px">
+          <div class="name"><span class="av" id="pfAvatar" style="background:var(--p1);width:56px;height:56px;font-size:18px"></span><span style="color:var(--mute);font-size:13px">Your artist name is what collaborators see. Your legal name goes on the split sheet.</span></div>
+          <div class="grid2">
+            <label for="pf-artistName">Artist name<input id="pf-artistName" maxlength="80"></label>
+            <label for="pf-legalName">Legal name<input id="pf-legalName" maxlength="120"></label>
+            <label for="pf-role">Main role<select id="pf-role"></select></label>
+            <label for="pf-pro">PRO<input id="pf-pro" maxlength="60"></label>
+            <label for="pf-ipi">IPI number<input id="pf-ipi" maxlength="40"></label>
+            <label for="pf-publisher">Publisher<input id="pf-publisher" maxlength="120"></label>
+            <label for="pf-publisherIpi">Publisher IPI<input id="pf-publisherIpi" maxlength="40"></label>
+            <label for="pf-isni">ISNI (optional)<input id="pf-isni" maxlength="40" placeholder="0000 0000 0000 0000"></label>
+            <label for="pf-phone">Phone<input id="pf-phone" maxlength="40"></label>
+            <label for="pf-email">Email (used to sign in)<input id="pf-email" disabled></label>
+          </div>
+          <div id="pfError" class="status err" role="alert"></div>
+          <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn dark" type="submit">Save changes</button></div>
+        </div>
+      </form>
+      <div class="card" style="margin-top:16px">
+        <header><h2>Your Artist ID</h2><button class="btn line" type="button" id="aidCopy">Copy</button></header>
+        <div class="pad" style="display:grid;gap:10px">
+          <code class="artistid" id="aidValue"></code>
+          <p style="color:var(--mute);font-size:14px;max-width:70ch">Give this to anyone adding you to a split sheet. They type it into Split Tracker, or into "Add collaborator" here, and your name and details fill in and the split comes to this account for your approval. It is safe to share: it cannot sign in or upload anything.</p>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <header><h2>Plugin link</h2></header>
+        <div class="pad" style="display:grid;gap:12px">
+          <p style="color:var(--mute);font-size:14px;max-width:70ch">A plugin key is different from your Artist ID: keep it private. It lets Split Tracker on one computer upload its records to this account: splits, session time, takes, bounce and stem fingerprints and its log. Never audio. Create one key per computer and paste it into the plugin's Evidence tab. Your keys stay listed here, so you can copy one again whenever you need it.</p>
+          <form id="keyForm" style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="keyName" placeholder="Name this computer, e.g. Studio Mac" aria-label="Computer name" maxlength="60" style="max-width:320px">
+            <button class="btn dark" type="submit">Create key</button>
+          </form>
+          <div id="keyError" class="status err" role="alert"></div>
+        </div>
+        <div class="scroll"><table id="keyTable">
+          <thead><tr><th>Computer</th><th>Key</th><th>Created</th><th>Last used</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <header><h2>Your data</h2></header>
+        <div class="pad" style="display:grid;gap:12px">
+          <p style="color:var(--mute);font-size:14px;max-width:80ch">You can take a copy of everything held about you, or delete your account. Songs that other people are on have to be handed to another owner or deleted first.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn line" type="button" id="exportBtn">Show a copy of my data</button><button class="btn line" type="button" id="exportCopy" hidden>Copy it</button></div>
+          <textarea id="exportOut" readonly hidden rows="8" aria-label="Your data"></textarea>
+          <form id="deleteAccountForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input id="deletePass" type="password" autocomplete="current-password" placeholder="Your password" aria-label="Password" style="max-width:240px">
+            <button class="btn no" type="submit">Delete my account</button>
+          </form>
+          <div id="dataError" class="status err" role="alert"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" hidden role="status"></div>
+<script>
+"use strict";(()=>{var Zt=Object.defineProperty;var qt=(e,t,r)=>t in e?Zt(e,t,{enumerable:!0,configurable:!0,writable:!0,value:r}):e[t]=r;var ge=(e,t,r)=>qt(e,typeof t!="symbol"?t+"":t,r);async function E(e,t,r){let n=await fetch(`/api${t}`,{method:e,credentials:"same-origin",headers:e==="GET"?{}:{"content-type":"application/json"},body:e==="GET"?void 0:JSON.stringify(r??{})}),a=await n.json().catch(()=>({}));if(!n.ok)throw new Error(a.error??"Something went wrong. Try again.");return a}var Le={mode:"server",me:()=>E("GET","/me").catch(()=>null),register:e=>E("POST","/register",e),login:(e,t)=>E("POST","/login",{email:e,password:t}),logout:()=>E("POST","/logout"),saveProfile:e=>E("PUT","/profile",e),works:()=>E("GET","/works"),activity:()=>E("GET","/activity"),createWork:e=>E("POST","/works",e),updateWork:(e,t)=>E("PUT",`/works/${e}`,t),work:e=>E("GET",`/works/${e}`),setOwner:(e,t)=>E("POST",`/works/${e}/owner`,{artistId:t}),deleteWork:(e,t)=>E("DELETE",`/works/${e}`,{confirmTitle:t}),exportMyData:()=>E("GET","/me/export"),deleteAccount:e=>E("DELETE","/me",{password:e}),savePeople:(e,t)=>E("PUT",`/works/${e}/people`,{people:t}),send:e=>E("POST",`/works/${e}/send`),decide:(e,t)=>E("POST",`/works/${e}/decision`,{decision:t}),postMessage:(e,t)=>E("POST",`/works/${e}/messages`,{body:t}),pluginKeys:()=>E("GET","/keys"),createPluginKey:e=>E("POST","/keys",{name:e}),revokePluginKey:e=>E("DELETE",`/keys/${e}`),fingerprints:()=>E("GET","/fingerprints"),fingerprintDetails:e=>E("GET",`/works/${e.workId}/fingerprints/${e.fpId}/details${e.track?`?track=${encodeURIComponent(e.track)}`:""}`),artist:e=>E("GET",`/artists/${encodeURIComponent(e)}`),uploadReceipt:(e,t)=>E("POST","/receipts",{receipt:e,...t}),signatures:()=>E("GET","/signatures"),fingerprintData:async e=>{let t=await fetch(`/api/works/${e.workId}/fingerprints/${e.fpId}`,{credentials:"same-origin"});if(!t.ok)throw new Error("Could not load that fingerprint");return t.arrayBuffer()}};async function Je(){try{let e=await fetch("/api/health",{credentials:"same-origin"});return e.ok&&(await e.json()).ok===!0}catch{return!1}}var ze=(e,t)=>Math.abs(e-t)<.005,ye=(e,t)=>Math.round(e.reduce((r,n)=>r+(Number(n[t])||0),0)*100)/100,Q=e=>e.writerShare>0||e.masterShare>0;function Yt(e){if(e.length===0)return"Add at least one person";for(let r of e){if(!r.artistName.trim())return"Someone has no artist name";if(r.writerShare<0||r.masterShare<0)return`Shares cannot be negative (${r.artistName})`}if(!ze(ye(e,"writerShare"),100))return"Writer shares must total 100%";if(!ze(ye(e,"masterShare"),100))return"Master shares must total 100%";let t=e.find(r=>Q(r)&&!r.legalName.trim());return t?`Legal name missing for ${t.artistName}`:""}function ve(e){let t=Yt(e);if(t)return t;let r=e.find(a=>Q(a)&&!a.email.trim());if(r)return`Email missing for ${r.artistName}`;let n=new Set;for(let a of e){let s=a.email.trim().toLowerCase();if(s){if(n.has(s))return`${s} is on the sheet twice`;n.add(s)}}return""}function Xe(e,t,r){return e==="draft"?"draft":r?t==="approved"?"approved":t==="declined"?"declined":"pending":"credit"}var Qe=e=>e.every(t=>!t.share||t.decision==="approved");var H=36e5,D=Date.now(),v={id:1,email:"nova@example.com",artistId:"ST-7K2Q-9FX8",artistName:"Nova Kane",legalName:"Naomi K. Ellison",role:"Artist",pro:"ASCAP",ipi:"00512 34 67 89",publisher:"Kane Songs",publisherIpi:"00698 11 20 45",isni:"",phone:"+1 555 0142"},ke=!1,B=(e,t,r,n,a,s,d)=>({artistName:e,legalName:t,role:r,writerShare:n,masterShare:a,email:s,decision:d}),Y=(e,t,r)=>({time:D-e*H,type:t,text:r,hash:"example"}),ee=[{id:"night-signal",title:"Night Signal",album:"Afterglow",status:"sent",owner:v.email,updatedAt:D-H,rows:[B("Nova Kane","Naomi K. Ellison","Artist",40,50,"nova@example.com","approved"),B("Lil Vanta","Devon A. Marsh","Featured Artist",25,20,"vanta@example.com","approved"),B("DJ Halcyon","Halvard Lindqvist","Producer",20,30,"halcyon@example.com","approved"),B("Riko Santos","Ricardo Santos","Songwriter",15,0,"riko@example.com","none")],messages:[{author:"Nova Kane",email:"nova@example.com",body:"Splits for Night Signal are ready. Please check your share and legal name, then approve.",time:D-20*H},{author:"Riko Santos",email:"riko@example.com",body:"Got it. The log shows four guitar takes on my side. Can we talk about 15% before I sign?",time:D-2*H}],events:[Y(30,"CREATE",'Nova Kane created "Night Signal" on "Afterglow"'),Y(21,"SEND","Nova Kane sent the split sheet for approval"),Y(5,"APPROVE","DJ Halcyon (Halvard Lindqvist) approved the split: writer 20%, master 30%")]},{id:"low-orbit",title:"Low Orbit",album:"Afterglow",status:"signed",owner:v.email,updatedAt:D-50*H,rows:[B("Nova Kane","Naomi K. Ellison","Artist",50,60,"nova@example.com","approved"),B("DJ Halcyon","Halvard Lindqvist","Producer",50,40,"halcyon@example.com","approved")],messages:[],events:[Y(90,"CREATE",'Nova Kane created "Low Orbit" on "Afterglow"'),Y(50,"SIGNED","Everyone with a share approved. The split sheet is signed.")]},{id:"glass-hours",title:"Glass Hours",album:"",status:"sent",owner:"mara@example.com",updatedAt:D-8*H,rows:[B("Mara Voss","Mara E. Voss","Artist",60,70,"mara@example.com","approved"),B("Nova Kane","Naomi K. Ellison","Featured Artist",40,30,"nova@example.com","none")],messages:[{author:"Mara Voss",email:"mara@example.com",body:"Sent you the Glass Hours split. Shout if anything looks off.",time:D-8*H}],events:[Y(9,"CREATE",'Mara Voss created "Glass Hours"'),Y(8,"SEND","Mara Voss sent the split sheet for approval")]},{id:"paper-planes",title:"Paper Planes II",album:"",status:"draft",owner:v.email,updatedAt:D-100*H,rows:[B("Nova Kane","Naomi K. Ellison","Artist",100,100,"nova@example.com","none")],messages:[],events:[Y(100,"CREATE",'Nova Kane created "Paper Planes II"')]}],Jt={syncedAt:D-H,logIntact:!0,logEntries:64,chainHead:"c6e07b9a41b803d5d13f52c477aae8100be49c268a401f3b2c9db06e9f2ca71e",splitsLocked:!0,sessionSeconds:14760,recordSeconds:2004,tracks:[{trackName:"Lead Vox",person:"Nova Kane",signalSeconds:3120,recordSeconds:860,takes:3},{trackName:"Feature",person:"Lil Vanta",signalSeconds:1410,recordSeconds:365,takes:2},{trackName:"808 Drums",person:"DJ Halcyon",signalSeconds:5200,recordSeconds:192,takes:1},{trackName:"Guitar",person:"Riko Santos",signalSeconds:2230,recordSeconds:587,takes:4}],projects:[],takes:[],project:{fileName:"Night Signal.logicx",sha:"0be49c26d13f52c477aae810c6e07b9a41b803d58a401f3b2c9db06e9f2ca71e",daw:"Logic Pro",time:D-2*H},bounces:[{num:1,time:D-3*H,durationSecs:192,fpId:"c6e07b9a".padEnd(64,"0"),fileSha:"",stems:[{trackName:"Lead Vox",person:"Nova Kane",fpId:"d13f52c4".padEnd(64,"0")},{trackName:"Feature",person:"Lil Vanta",fpId:"8a401f3b".padEnd(64,"0")},{trackName:"808 Drums",person:"DJ Halcyon",fpId:"77aae810".padEnd(64,"0")},{trackName:"Guitar",person:"Riko Santos",fpId:"2c9db06e".padEnd(64,"0")}]}]};function J(e){let t=ee.find(r=>r.id===e);if(!t)throw new Error("Song not found");return t}function se(e,t,r){e.events.push({time:Date.now(),type:t,text:r,hash:"example"}),e.updatedAt=Date.now()}function W(e){let t=e.rows.find(n=>n.email===v.email),r=e.status==="sent";return{id:e.id,title:e.title,album:e.album,status:e.status,isOwner:e.owner===v.email,songCode:"SG-4MPT-2K7M",ownerName:e.owner===v.email?v.artistName:"Mara Voss",ownerArtistId:e.owner===v.email?v.artistId:"ST-MARA-V0S5",ownerStated:!0,youOwn:e.owner===v.email,isrc:"",iswc:"",splitVersion:1,sources:e.id==="night-signal"?[{artistName:"Nova Kane",isOwner:!0,syncedAt:D-H,logIntact:!0,logEntries:64,tracks:4,takes:10,bounces:1}]:[],people:e.rows.map(n=>n.artistName),yourWriterShare:t?t.writerShare:null,awaiting:r?e.rows.filter(n=>Q(n)&&n.decision!=="approved").length:0,needsYou:r&&!!t&&t.decision==="none"&&Q(t),updatedAt:e.updatedAt,rows:e.rows.map(({decision:n,...a})=>({...a,status:Xe(e.status,n,Q(a)),hasAccount:!0})),yourDecision:t?t.decision:null,messages:e.messages.map((n,a)=>({id:a,author:n.author,mine:n.email===v.email,body:n.body,time:n.time})),events:e.events,chainIntact:!0,evidence:e.id==="night-signal"?Jt:null}}function et(e){Qe(e.rows.map(t=>({share:Q(t),decision:t.decision})))&&(e.status="signed",se(e,"SIGNED","Everyone with a share approved. The split sheet is signed."))}var tt={mode:"preview",me:async()=>ke?v:null,register:async()=>(ke=!0,v),login:async()=>(ke=!0,v),logout:async()=>{ke=!1},saveProfile:async e=>v={...v,...e},works:async()=>[...ee].sort((e,t)=>t.updatedAt-e.updatedAt).map(W),activity:async()=>ee.flatMap(e=>e.events.map(t=>({work:e.title,time:t.time,text:t.text}))).sort((e,t)=>t.time-e.time).slice(0,12),createWork:async({title:e,album:t,copyFrom:r})=>{if(!e.trim())throw new Error("Title is required");let n=r?J(r):null,a={id:`w${Date.now()}`,title:e.trim(),album:t.trim(),status:"draft",owner:v.email,messages:[],events:[],updatedAt:Date.now(),rows:n?n.rows.map(s=>({...s,decision:"none"})):[B(v.artistName,v.legalName,v.role,100,100,v.email,"none")]};return se(a,"CREATE",`${v.artistName} created "${a.title}"${a.album?` on "${a.album}"`:""}`),ee.push(a),W(a)},updateWork:async(e,{title:t,album:r})=>{let n=J(e);if(!t.trim())throw new Error("Title is required");return n.title=t.trim(),n.album=r.trim(),se(n,"FILE",`${v.artistName} filed this as "${n.title}"${n.album?` on "${n.album}"`:" (single)"}`),W(n)},work:async e=>W(J(e)),setOwner:async e=>W(J(e)),deleteWork:async e=>{let t=ee.findIndex(r=>r.id===e);t>=0&&ee.splice(t,1)},exportMyData:async()=>({profile:v,songs:ee.map(W)}),deleteAccount:async()=>{throw new Error("Deleting an account needs the server. This is the preview.")},savePeople:async(e,t)=>{let r=J(e);if(r.status==="signed")throw new Error("This split sheet is signed and can no longer be changed");return r.rows=t.map(n=>({...n,email:n.email.trim().toLowerCase(),decision:"none"})),r.status="draft",se(r,"SPLIT",`${v.artistName} set the split (writer/master): ${t.map(n=>`${n.artistName} ${n.writerShare}/${n.masterShare}`).join(", ")}`),W(r)},send:async e=>{let t=J(e),r=ve(W(t).rows);if(r)throw new Error(r);t.status="sent";for(let n of t.rows)n.email===v.email&&(n.decision="approved");return se(t,"SEND",`${v.artistName} sent the split sheet for approval`),et(t),W(t)},decide:async(e,t)=>{let r=J(e),n=r.rows.find(a=>a.email===v.email);if(!n||r.status!=="sent")throw new Error("This split sheet is not waiting for you");return n.decision=t,se(r,t==="approved"?"APPROVE":"DECLINE",`${v.artistName} (${v.legalName}) ${t} the split: writer ${n.writerShare}%, master ${n.masterShare}%`),et(r),W(r)},pluginKeys:async()=>[],createPluginKey:async()=>{throw new Error("Plugin keys need the server. This is the preview.")},revokePluginKey:async()=>[],fingerprints:async()=>[],signatures:async()=>[],uploadReceipt:async()=>{throw new Error("Uploading a receipt needs the server. This is the preview.")},artist:async()=>{throw new Error("Looking up an Artist ID needs the server. This is the preview.")},fingerprintDetails:async()=>{throw new Error("Details need the server. This is the preview.")},fingerprintData:async()=>new ArrayBuffer(0),postMessage:async(e,t)=>{let r=J(e);return r.messages.push({author:v.artistName,email:v.email,body:t,time:Date.now()}),r.updatedAt=Date.now(),W(r)}};var c={backend:tt,user:null,workId:null},T=e=>new Date(e).toLocaleString(void 0,{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}),te=e=>e.split(/\s+/).map(t=>t[0]??"").join("").slice(0,2).toUpperCase()||"?",ie=["--p1","--p2","--p3","--p4","--p5"],re={draft:["idle","Draft"],sent:["wait","Awaiting approval"],signed:["ok","Signed"]};var o=(e,t=document)=>{let r=t.querySelector(e);if(!r)throw new Error(`Missing element ${e}`);return r},Ae=(e,t=document)=>Array.from(t.querySelectorAll(e)),i=e=>String(e).replace(/[&<>"]/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[t]),rt;function k(e){let t=o("#toast");t.textContent=e,t.hidden=!1,clearTimeout(rt),rt=window.setTimeout(()=>t.hidden=!0,2600)}var Se=()=>new Promise(e=>setTimeout(e,0));function Pe(e,t,r){t.addEventListener("change",()=>{r(Array.from(t.files??[])),t.value=""}),e.addEventListener("dragover",n=>{n.preventDefault(),e.classList.add("over")}),e.addEventListener("dragleave",()=>e.classList.remove("over")),e.addEventListener("drop",n=>{n.preventDefault(),e.classList.remove("over"),r(Array.from(n.dataTransfer?.files??[]))})}var zt=["dashboard","collaborate","identify","verify","messages","profile"],nt=new Map,x=(e,t)=>void nt.set(e,t),at=()=>location.hash.replace("#","")||"home";function L(e){at()===e?Ie():location.hash=e}function Ie(){let e=at(),t=zt.includes(e);if(t&&!c.user){location.hash="sign-in";return}let r=e==="sign-in"||e==="sign-up";if(r&&c.user){location.hash="dashboard";return}o("#site").hidden=t||r,o("#signin").hidden=!r,o("#shell").hidden=!t;for(let n of Ae("[data-view]"))n.hidden=n.dataset.view!==e;for(let n of Ae(".side .tab"))n.dataset.go===e?n.setAttribute("aria-current","page"):n.removeAttribute("aria-current");window.scrollTo(0,0),nt.get(e)?.()}function ot(){window.addEventListener("hashchange",Ie),document.addEventListener("click",e=>{let t=e.target,r=t.closest("[data-go]");if(r){L(r.dataset.go??"home");return}let n=t.closest("[data-jump]");n&&document.getElementById(n.dataset.jump??"")?.scrollIntoView({behavior:"smooth"})}),Ie()}var K=!1;function st(){o("#authTitle").textContent=K?"Create your account":"Sign in to your account",o("#authSubmit").textContent=K?"Create account":"Sign in",o("#authSwitch").textContent=K?"I already have an account":"Create an account",o("#regFields").hidden=!K,o("#au-pass").autocomplete=K?"new-password":"current-password",o("#authNote").textContent=c.backend.mode==="preview"?"This is a preview with no server behind it. Press the button to open the example workspace.":K?"Use the email your collaborators will invite you with. Passwords need at least 10 characters.":"",o("#authError").textContent=""}function it(){x("sign-in",()=>{K=!1,st()}),x("sign-up",()=>{K=!0,st()}),o("#authSwitch").addEventListener("click",()=>{location.hash=K?"sign-in":"sign-up"}),o("#authForm").addEventListener("submit",async e=>{e.preventDefault();let t=o("#au-email").value,r=o("#au-pass").value,n=o("#authSubmit");n.disabled=!0;try{c.user=K?await c.backend.register({email:t,password:r,artistName:o("#au-artist").value,legalName:o("#au-legal").value}):await c.backend.login(t,r),o("#au-pass").value="",L("dashboard")}catch(a){o("#authError").textContent=a.message}finally{n.disabled=!1}}),o("#signOut").addEventListener("click",async()=>{await c.backend.logout().catch(()=>{}),c.user=null,c.workId=null,L("home")})}var Ne="0123456789ABCDEFGHJKMNPQRSTVWXYZ";function Xt(e){let t=0;for(let r=0;r<e.length;r++)t+=Ne.indexOf(e[r])*(r+1);return Ne[t%32]}var Qt=(e,t="ST")=>`${t}-${e.slice(0,4)}-${e.slice(4)}`;function lt(e){return er(e,"ST")}function er(e,t){let r=e.toUpperCase().replace(/[^A-Z0-9]/g,"");if(r.length===10&&r.startsWith(t)&&(r=r.slice(2)),r=r.replace(/O/g,"0").replace(/[IL]/g,"1"),r.length!==8)return null;for(let n of r)if(!Ne.includes(n))return null;return Xt(r.slice(0,7))===r[7]?Qt(r,t):null}var le=["Artist","Featured Artist","Group / Band Member","Songwriter","Lyricist","Composer","Topliner","Arranger","Producer","Co-Producer","Additional Producer","Beatmaker","Vocal Producer","Executive Producer","Session Musician","Background Vocalist","Recording Engineer","Mixing Engineer","Mastering Engineer","A&R","Manager","Record Label","Publisher","Sample / Interpolation Owner","Other"];function He(e){let t=new Map;for(let r of e)t.set(r.album,[...t.get(r.album)??[],r]);return[...t.entries()].sort(([r],[n])=>r===""?1:n===""?-1:r.localeCompare(n))}function tr(e){if(e.needsYou)return'<span class="st wait">Needs your approval</span>';if(e.status==="sent")return`<span class="st wait">Awaiting ${e.awaiting}</span>`;let[t,r]=re[e.status];return`<span class="st ${t}">${r}</span>`}var mt=e=>le.map(t=>`<option${t===e?" selected":""}>${i(t)}</option>`).join("");async function dt(e,t){let n=(await c.backend.work(e)).rows.map(({status:d,hasAccount:m,...l})=>l),a={artistName:t.artistName.trim(),legalName:"",role:t.role,writerShare:0,masterShare:0,email:t.contact.trim()},s=lt(t.contact);if(s){let d=await c.backend.artist(s);a={...a,artistName:d.artistName,legalName:d.legalName,role:t.role||d.role,email:d.email}}else if(t.contact.trim()&&!t.contact.includes("@"))throw new Error("Enter their Artist ID (like ST-7K2Q-9FXM) or their email address");if(!a.artistName)throw new Error("Enter their artist name or their Artist ID");if(a.email&&n.some(d=>d.email.toLowerCase()===a.email.toLowerCase()))throw new Error("That person is already on this song");n.push(a),await c.backend.savePeople(e,n)}async function ct(){let e=c.user;if(!e)return;o("#hello").textContent=`Hello, ${e.artistName.split(" ")[0]}`,o("#meChip").innerHTML=`<span class="av" style="background:var(--p1)">${i(te(e.artistName))}</span>${i(e.artistName)}`;let[t,r]=await Promise.all([c.backend.works(),c.backend.activity()]),n=(a,s,d=!1)=>`<div class="kpi"><small>${a}</small><b${d&&s>0?' style="color:var(--wait)"':""}>${s}</b></div>`;o("#kpis").innerHTML=n("Songs",t.length)+n("Waiting for you",t.filter(a=>a.needsYou).length,!0)+n("Waiting for others",t.filter(a=>a.status==="sent"&&!a.needsYou).length)+n("Signed split sheets",t.filter(a=>a.status==="signed").length),o("#worksByAlbum").innerHTML=t.length===0?'<div class="pad" style="color:var(--mute)">No songs yet. Add your first one above.</div>':He(t).map(([a,s])=>`
+      <div class="album"><span>${i(a||"Singles")}</span><span>${s.length} ${s.length===1?"song":"songs"}</span></div>
+      <div class="scroll"><table>
+        <thead><tr><th>Title</th><th>Collaborators</th><th class="num">Your writer share</th><th>Status</th><th></th></tr></thead>
+        <tbody>${s.map(d=>`
+          <tr>
+            <td><button type="button" class="worklink" data-open="${i(d.id)}">${i(d.title)}</button>${d.isOwner?"":' <span style="color:var(--mute);font-size:12px">shared with you</span>'}</td>
+            <td><span class="stack">${d.people.slice(0,6).map((m,l)=>`<span class="av" title="${i(m)}" style="background:var(${ie[l%ie.length]})">${i(te(m))}</span>`).join("")}</span></td>
+            <td class="num">${d.yourWriterShare===null?"\u2014":`${d.yourWriterShare}%`}</td>
+            <td>${tr(d)}</td>
+            <td>${d.isOwner&&d.status==="draft"?`<button type="button" class="x" data-collab="${i(d.id)}">Add collaborator</button>`:""}</td>
+          </tr>`).join("")}</tbody>
+      </table></div>`).join(""),o("#albumList").innerHTML=[...new Set(t.map(a=>a.album).filter(Boolean))].map(a=>`<option value="${i(a)}">`).join(""),o("#nwCopy").innerHTML='<option value="">Start with just me at 100%</option>'+t.filter(a=>a.isOwner).map(a=>`<option value="${i(a.id)}">Same split as ${i(a.title)}</option>`).join(""),o("#nwCollabRole").innerHTML=mt("Songwriter"),o("#activity").innerHTML=r.length===0?'<div style="color:var(--mute)">Nothing yet.</div>':r.map(a=>`<div>${i(a.text)}<time>${i(a.work)} \xB7 ${i(T(a.time))}</time></div>`).join("")}function ut(){x("dashboard",ct),o("#worksByAlbum").addEventListener("click",e=>{let t=e.target,r=t.closest("[data-open]")?.dataset.open;if(r){c.workId=r,L("collaborate");return}let n=t.closest("[data-collab]");if(!n)return;let a=n.closest("tr");if(a.nextElementSibling?.classList.contains("collabform")){a.nextElementSibling.remove();return}let s=document.createElement("tr");s.className="collabform",s.innerHTML=`<td colspan="5"><form data-collab-for="${i(n.dataset.collab)}">
+      <input name="contact" placeholder="Their Artist ID (or email)" aria-label="Artist ID or email" maxlength="254" required>
+      <input name="artistName" placeholder="Artist name (filled in from the ID)" aria-label="Artist name" maxlength="80">
+      <select name="role" aria-label="Role">${mt("Songwriter")}</select>
+      <button class="btn dark" type="submit">Add</button>
+      <span class="soon"><button class="btn line" type="button" disabled tabindex="-1">Invite</button><em>Soon</em></span></form></td>`,a.after(s),s.querySelector("input")?.focus()}),o("#worksByAlbum").addEventListener("submit",async e=>{let t=e.target.closest("form[data-collab-for]");if(!t)return;e.preventDefault();let r=new FormData(t);try{await dt(t.dataset.collabFor,{artistName:String(r.get("artistName")??""),contact:String(r.get("contact")??""),role:String(r.get("role")??"Songwriter")}),k("Collaborator added. Set the shares on the split sheet."),await ct()}catch(n){k(n.message)}}),o("#newWork").addEventListener("submit",async e=>{e.preventDefault();let t=o("#nwTitle"),r=o("#nwAlbum");try{let n=await c.backend.createWork({title:t.value,album:r.value,copyFrom:o("#nwCopy").value||void 0}),a=o("#nwCollab"),s=o("#nwCollabEmail");(a.value.trim()||s.value.trim())&&(await dt(n.id,{artistName:a.value,contact:s.value,role:o("#nwCollabRole").value}),a.value="",s.value=""),t.value="",c.workId=n.id,L("collaborate")}catch(n){k(n.message)}})}var de=class{constructor(t){ge(this,"size");ge(this,"cos");ge(this,"sin");ge(this,"rev");if(t<2||t&t-1)throw new Error("FFT size must be a power of two");this.size=t,this.cos=new Float64Array(t/2),this.sin=new Float64Array(t/2);for(let n=0;n<t/2;n++)this.cos[n]=Math.cos(2*Math.PI*n/t),this.sin[n]=Math.sin(2*Math.PI*n/t);let r=Math.log2(t);this.rev=new Uint32Array(t);for(let n=0;n<t;n++){let a=0;for(let s=0;s<r;s++)a|=(n>>s&1)<<r-1-s;this.rev[n]=a}}transform(t,r){let n=this.size;for(let a=0;a<n;a++){let s=this.rev[a];if(s>a){let d=t[a];t[a]=t[s],t[s]=d;let m=r[a];r[a]=r[s],r[s]=m}}for(let a=2;a<=n;a<<=1){let s=a>>1,d=n/a;for(let m=0;m<n;m+=a)for(let l=0;l<s;l++){let h=this.cos[l*d],b=this.sin[l*d],y=m+l,S=y+s,w=t[S]*h+r[S]*b,u=r[S]*h-t[S]*b;t[S]=t[y]-w,r[S]=r[y]-u,t[y]+=w,r[y]+=u}}}};var U=2048,De=64,ce=33,V=11025,pt=300,rr=2e3,ft=De/V,be=e=>e.coverage>=.5&&e.similarity>=.7,$e=e=>e.coverage>=.8&&e.similarity>=.85;function ht(e,t){let r=e.length;if(r===0)return new Float32Array(0);let n=e[0].length,a=t/V,s=Math.min(V*.4,t*.45),d=2*Math.PI*s/t,m=Math.sin(d)/(2*.7071),l=Math.cos(d),h=1+m,b=(1-l)/2/h,y=(1-l)/h,S=b,w=-2*l/h,u=(1-m)/h,$=[0,0,0,0],f=new Float32Array(Math.ceil(n/a)+2),g=0,M=0,_=0,N=1/r;for(let q=0;q<n;q++){let X=0;for(let j=0;j<r;j++)X+=e[j][q];let G=Math.fround(X*N);for(let j=0;j<2;j++){let Me=b*G+$[j*2];$[j*2]=y*G-w*Me+$[j*2+1],$[j*2+1]=S*G-u*Me,G=Me}for(;M<1;)f[g++]=_+(G-_)*M,M+=a;M-=1,_=G}return f.subarray(0,g)}function Fe(e){let t=new de(U),r=new Float32Array(U);for(let b=0;b<U;b++)r[b]=.5-.5*Math.cos(2*Math.PI*b/(U-1));let n=new Int32Array(ce+1);for(let b=0;b<=ce;b++){let y=pt*Math.pow(rr/pt,b/ce);n[b]=Math.min(U/2-1,Math.max(1,Math.round(y/V*U)))}let a=e.length>=U?Math.floor((e.length-U)/De)+1:0,s=new Uint32Array(Math.max(0,a-1)),d=new Float64Array(U),m=new Float64Array(U),l=new Float64Array(ce),h=new Float64Array(ce);for(let b=0;b<a;b++){let y=b*De;for(let w=0;w<U;w++)d[w]=Math.fround(e[y+w]*r[w]),m[w]=0;t.transform(d,m);for(let w=0;w<ce;w++){let u=0,$=Math.max(n[w]+1,n[w+1]);for(let f=n[w];f<$;f++)u+=d[f]*d[f]+m[f]*m[f];h[w]=u}if(b>0){let w=0;for(let u=0;u<32;u++)h[u]-h[u+1]-(l[u]-l[u+1])>0&&(w|=1<<u);s[b-1]=w>>>0}let S=l;l=h,h=S}return{frames:s,secondsPerFrame:ft}}function nr(e){return e=e-(e>>>1&1431655765),e=(e&858993459)+(e>>>2&858993459),(e+(e>>>4)&252645135)*16843009>>>24}function Ce(e,t,r=ft){let n={similarity:0,coverage:0,offsetSeconds:0},a=256;if(e.length<a||t.length<a)return n;let s=Math.floor(t.length/a),d=Math.max(1,Math.floor(s/24)),m=0,l=0,h=0,b=0;for(let y=0;y<s;y+=d){let S=y*a,w=a*32+1,u=0;for(let f=0;f+a<=e.length;f++){let g=0;for(let M=0;M<a&&g<w;M++)g+=nr(e[f+M]^t[S+M]);g<w&&(w=g,u=f)}m++;let $=w/(a*32);$<.35&&(l++,h+=$,b+=(u-S)*r)}return n.coverage=m>0?l/m:0,l>0&&(n.similarity=1-h/l,n.offsetSeconds=b/l),n}var ar="TBAFP1";function Oe(e){if(e.byteLength<18)return null;let t=new DataView(e);for(let s=0;s<6;s++)if(t.getUint8(s)!==ar.charCodeAt(s))return null;let r=t.getFloat64(6,!0),n=t.getInt32(14,!0);if(n<0||n>1e7||18+n*4>e.byteLength)return null;let a=new Uint32Array(n);for(let s=0;s<n;s++)a[s]=t.getUint32(18+s*4,!0);return{frames:a,secondsPerFrame:r}}async function Z(e){let t=await crypto.subtle.digest("SHA-256",e);return Array.from(new Uint8Array(t),r=>r.toString(16).padStart(2,"0")).join("")}async function Re(e){let t=e.filter(n=>n.path.split("/").pop()!==".DS_Store");if(t.length===0)throw new Error("That folder has no files in it");let r=t.map(n=>`${n.path.replace(/\\/g,"/")} = ${n.sha}`).sort((n,a)=>n<a?-1:n>a?1:0);return Z(new TextEncoder().encode(r.join(`
+`)))}var gt=e=>/^[0-9a-f]{64}$/i.test(e.trim());function yt(e){let t=e.replace(/\.fingerprint$/i,""),r=/^(.*?) - bounce (\d+) - .*? - stem - (.+)$/.exec(t);if(r)return{kind:"Stem",name:`${r[3]} (${r[1]}, bounce ${r[2]})`};let n=/^(.*?) - bounce (\d+) - /.exec(t);return n?{kind:"Master",name:`${n[1]}, bounce ${n[2]}`}:{kind:"Master",name:t}}function F(e){let t=Math.max(0,Math.round(e));return`${Math.floor(t/60)}:${String(t%60).padStart(2,"0")}`}var C=4096,Ue=2048,or=Ue/V,sr=130,ir=2e3,vt="Not tested yet: a melody re-sung by another voice or replayed on another instrument.",We={similarity:.85,margin:.2,seconds:20},bt={similarity:.8,margin:.15},kt=e=>e.similarity>=We.similarity&&e.margin>=We.margin&&e.seconds>=We.seconds,St=e=>e.similarity>=bt.similarity&&e.margin>=bt.margin;function je(e){let t=new de(C),r=new Float64Array(C);for(let u=0;u<C;u++)r[u]=.5-.5*Math.cos(2*Math.PI*u/(C-1));let n=Math.ceil(sr/V*C),a=Math.floor(ir/V*C),s=new Int8Array(a+1);for(let u=n;u<=a;u++){let $=69+12*Math.log2(u*V/C/440);s[u]=(Math.round($)%12+12)%12}let d=e.length>=C?Math.floor((e.length-C)/Ue)+1:0,m=new Float32Array(d*12),l=new Float64Array(d),h=new Float64Array(C),b=new Float64Array(C),y=new Float64Array(a+2),S=0;for(let u=0;u<d;u++){let $=u*Ue;for(let g=0;g<C;g++)h[g]=e[$+g]*r[g],b[g]=0;t.transform(h,b);for(let g=n-1;g<=a+1;g++)y[g]=h[g]*h[g]+b[g]*b[g];let f=0;for(let g=n;g<=a;g++)y[g]>y[g-1]&&y[g]>=y[g+1]&&(m[u*12+s[g]]+=y[g],f+=y[g]);l[u]=f,f>S&&(S=f)}let w=S*1e-4;for(let u=0;u<d;u++){let $=0;for(let g=0;g<12;g++)$+=m[u*12+g]*m[u*12+g];$=Math.sqrt($);let f=l[u]<=w||$===0;for(let g=0;g<12;g++)m[u*12+g]=f?0:m[u*12+g]/$}return{chroma:m,frames:d}}function wt(e,t){let r=e;for(;r.frames>t;){let n=Math.floor(r.frames/2),a=new Float32Array(n*12);for(let s=0;s<n;s++){let d=0;for(let m=0;m<12;m++){let l=r.chroma[s*24+m]+r.chroma[s*24+12+m];a[s*12+m]=l,d+=l*l}if(d=Math.sqrt(d),d>0)for(let m=0;m<12;m++)a[s*12+m]/=d}r={chroma:a,frames:n}}return r}function lr(e,t,r){let n=t.frames,a=e.frames,s=1e30,d=new Float64Array(a),m=new Float64Array(a),l=new Float64Array(a),h=new Uint16Array(a),b=new Uint16Array(a),y=new Uint16Array(a),S=new Float32Array(12);for(let u=0;u<n;u++){let $=!0;for(let f=0;f<12;f++)S[f]=t.chroma[u*12+(f+r)%12],S[f]!==0&&($=!1);for(let f=0;f<a;f++){let g=0,M=!0;for(let X=0;X<12;X++){let G=e.chroma[f*12+X];G!==0&&(M=!1),g+=G*S[X]}let _=$&&M?.5:$||M?1:1-g;if(u===0){d[f]=_,h[f]=1;continue}let N=s,q=0;f>=1&&m[f-1]<N&&(N=m[f-1],q=b[f-1]),f>=2&&m[f-2]<N&&(N=m[f-2],q=b[f-2]),u>=2&&f>=1&&l[f-1]<N&&(N=l[f-1],q=y[f-1]),N>=s?(d[f]=s,h[f]=0):(d[f]=N+_,h[f]=q+1)}if(u<n-1){let f=l;l=m,m=d,d=f;let g=y;y=b,b=h,h=g}}let w=1;for(let u=0;u<a;u++)d[u]<s&&h[u]>0&&(w=Math.min(w,d[u]/h[u]));return w}function $t(e,t){let r=Math.min(e.frames,t.frames)*or,n={similarity:0,margin:0,shift:0,seconds:r},a=wt(e,1200),s=wt(t,1200),d=s.frames>a.frames;if(d){let y=a;a=s,s=y}if(s.frames<16)return n;let m=[];for(let y=0;y<12;y++)m.push(1-lr(a,s,y));let l=0;for(let y=1;y<12;y++)m[y]>m[l]&&(l=y);let h=m.filter((y,S)=>S!==l).sort((y,S)=>y-S),b=h[Math.floor(h.length/2)];return{similarity:m[l],margin:m[l]-b,shift:d?(12-l)%12:l,seconds:r}}var dr="split-tracker",Be="library";function cr(){return new Promise((e,t)=>{let r=indexedDB.open(dr,1);r.onupgradeneeded=()=>r.result.createObjectStore(Be,{keyPath:"id"}),r.onsuccess=()=>e(r.result),r.onerror=()=>t(r.error)})}async function Ee(e,t){let r=await cr();return new Promise((n,a)=>{let s=t(r.transaction(Be,e).objectStore(Be));s.onsuccess=()=>n(s.result),s.onerror=()=>a(s.error)})}async function Et(){try{return await Ee("readonly",e=>e.getAll())}catch{return[]}}async function Tt(e){try{await Ee("readwrite",t=>t.put(e))}catch{}}async function xt(e){try{await Ee("readwrite",t=>t.delete(e))}catch{}}async function Mt(){try{await Ee("readwrite",e=>e.clear())}catch{}}var A=[];async function Pt(e){let t=window.OfflineAudioContext??window.webkitOfflineAudioContext,r=await new t(1,1,44100).decodeAudioData(await e.arrayBuffer()),n=[];for(let a=0;a<r.numberOfChannels;a++)n.push(r.getChannelData(a));return ht(n,r.sampleRate)}var Lt=()=>`${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;function z(e,t,r=!1){let n=o(e);n.textContent=t,n.classList.toggle("err",r)}function me(){o("#libTable tbody").innerHTML=A.length===0?'<tr><td colspan="5" style="color:var(--mute)">Nothing here yet. Add the fingerprint files from a bounce, or your own audio.</td></tr>':A.map(e=>`
+      <tr>
+        <td><button type="button" class="rowlink" data-detail="${i(e.id)}">${i(e.name)}</button></td>
+        <td><span class="st ${e.kind==="Audio"?"idle":"ok"}">${e.kind}</span></td>
+        <td class="num">${F(e.seconds)}</td>
+        <td>${e.fromSong?"Plugin sync":e.melody?"Audio, with melody":"Fingerprint file"}</td>
+        <td>${e.fromSong?"":`<button type="button" class="x" data-remove="${i(e.id)}">Remove</button>`}</td>
+      </tr>`).join("")}async function mr(e){let t=0,r=[];for(let n of e){z("#libStatus",`Reading ${n.name}\u2026`),await Se();try{let a;if(/\.fingerprint$/i.test(n.name)){let s=Oe(await n.arrayBuffer());if(!s)throw new Error("not a Split Tracker fingerprint");let d=yt(n.name);a={id:Lt(),name:d.name,kind:d.kind,seconds:s.frames.length*s.secondsPerFrame,frames:s.frames,secondsPerFrame:s.secondsPerFrame}}else{let s=await Pt(n),d=Fe(s);a={id:Lt(),name:n.name,kind:"Audio",seconds:s.length/11025,frames:d.frames,secondsPerFrame:d.secondsPerFrame,melody:je(s)}}A.push(a),await Tt(a),t++,me()}catch{r.push(n.name)}}z("#libStatus",r.length?`Added ${t}. Could not read: ${r.join(", ")}`:`Added ${t} ${t===1?"item":"items"}.`,r.length>0)}function ur(e){return $e(e.rec)?'<span class="st ok">Same recording</span>':be(e.rec)?'<span class="st wait">Shares material</span>':e.melody==="strong"?'<span class="st mel">Same melody</span>':e.melody==="possible"?'<span class="st mel soft">Possibly the same melody</span>':'<span class="st idle">No match</span>'}function pr(e){return $e(e.rec)?'<span class="wt ev" title="The recording itself matches">Evidence</span>':e.melody==="strong"?'<span class="wt sl" title="Notes match on real-song tests with no false matches, but it is not the same recording">Strong lead</span>':be(e.rec)||e.melody==="possible"?'<span class="wt ld" title="Worth listening to. Not proof.">Lead</span>':""}function fr(e){if(!e.mel)return'<span style="color:var(--mute)">n/a</span>';let t=`${Math.round(e.mel.similarity*100)}%`;if(e.melody==="none")return t;let r=e.mel.shift<=6?e.mel.shift:e.mel.shift-12;return r===0?`${t}, same key`:`${t}, ${Math.abs(r)} semitone${Math.abs(r)===1?"":"s"} ${r>0?"higher":"lower"}`}async function hr(e){let t=o("#idTable");if(t.hidden=!0,o("#idSha").textContent="",A.length===0){z("#idStatus","Add something to your library first.",!0);return}try{z("#idStatus",`Reading ${e.name}\u2026`),await Se();let r=await Pt(e),n=Fe(r),a=je(r);o("#idSha").textContent=`SHA-256 ${await Z(await e.arrayBuffer())}`;let s=[];for(let l of A){z("#idStatus",`Comparing with ${l.name}\u2026`),await Se();let h=l.frames.length>=n.frames.length?Ce(l.frames,n.frames,l.secondsPerFrame):Ce(n.frames,l.frames,n.secondsPerFrame),b=l.melody?$t(l.melody,a):null,y=b&&kt(b)?"strong":b&&St(b)?"possible":"none",S=$e(h)?4+h.similarity:be(h)?3+h.similarity:y==="strong"?2+b.similarity:y==="possible"?1+b.similarity:h.similarity*h.coverage;s.push({item:l,rec:h,mel:b,rank:S,melody:y})}let d=s.filter(l=>l.melody==="possible").sort((l,h)=>h.mel.similarity-l.mel.similarity);for(let l of d.slice(1))l.melody="none",l.rank=l.rec.similarity*l.rec.coverage;s.sort((l,h)=>h.rank-l.rank),o("#idTable tbody").innerHTML=s.map(l=>`
+      <tr>
+        <td><button type="button" class="rowlink" data-detail="${i(l.item.id)}">${i(l.item.name)}</button> <span style="color:var(--mute)">\xB7 ${l.item.kind}</span></td>
+        <td>${ur(l)}</td>
+        <td>${pr(l)}</td>
+        <td class="num">${l.rec.coverage>0?`${Math.round(l.rec.similarity*100)}%`:"\u2014"}</td>
+        <td class="num">${be(l.rec)?F(Math.abs(l.rec.offsetSeconds)):"\u2014"}</td>
+        <td class="num">${fr(l)}</td>
+      </tr>`).join(""),t.hidden=!1;let m=s[0];z("#idStatus",m.rank>=1?`${e.name}: best match is ${m.item.name}.`:`${e.name}: no match in your library.`)}catch{z("#idStatus",`Could not read ${e.name} as audio.`,!0)}}var O=(e,t)=>`<div><small>${e}</small><b>${t}</b></div>`;async function gr(e){let t=A.find(n=>n.id===e);if(!t)return;let r=o("#fpDetail");if(r.hidden=!1,o("#fdTitle").textContent=t.name,o("#fdKind").innerHTML=`<span class="st ${t.kind==="Audio"?"idle":"ok"}">${t.kind}</span>`,r.scrollIntoView({behavior:"smooth",block:"nearest"}),!t.ref){o("#fdBody").innerHTML=`<div class="evgrid">${O("Length",F(t.seconds))}${O("Source",t.melody?"Audio file you added":"Fingerprint file you added")}${O("Melody profile",t.melody?"Yes":"No")}${O("Fingerprint frames",t.frames.length.toLocaleString())}</div>
+      <div class="pad" style="color:var(--mute);font-size:14px">This was added by hand, so there is no session log for it. Masters and stems synced from the plugin show their takes and log here.</div>`;return}o("#fdBody").innerHTML='<div class="pad" style="color:var(--mute)">Loading\u2026</div>';try{let n=await c.backend.fingerprintDetails(t.ref),a=n.track?i(n.track.person||"No one set"):`${n.stems.length} ${n.stems.length===1?"stem":"stems"}`;o("#fdBody").innerHTML=`
+      <div class="evgrid">
+        ${O("Song",i(n.title)+(n.album?` <span style="font-weight:400;color:var(--mute)">\xB7 ${i(n.album)}</span>`:""))}
+        ${O(n.track?"Artist":"Sealed with",a)}
+        ${O("Bounce",`${n.bounce.num}, ${i(T(n.bounce.time))}`)}
+        ${O("Length",F(n.seconds))}
+      </div>
+      ${n.track?`<div class="evgrid">${O("Track",i(n.track.trackName))}${O("Takes",String(n.track.takes))}${O("Recorded",F(n.track.recordSeconds))}${O("Played",F(n.track.signalSeconds))}</div>`:""}
+      <div class="pad mono" style="border-bottom:1px solid var(--rule)">Fingerprint ${i(n.fpId)}${n.bounce.fileSha?`<br>Sealed export ${i(n.bounce.fileSha)}`:""}</div>
+      ${n.stems.length?`<div class="scroll"><table><thead><tr><th>Stem in this bounce</th><th>Artist</th></tr></thead><tbody>${n.stems.map(s=>`<tr><td>${i(s.trackName)}</td><td>${i(s.person||"No one set")}</td></tr>`).join("")}</tbody></table></div>`:""}
+      ${n.takes.length?`<div class="scroll"><table><thead><tr><th>Take</th><th>Artist</th><th>When</th><th class="num">Length</th><th class="num">Starts at</th></tr></thead><tbody>${n.takes.map(s=>`<tr><td>${s.num}</td><td>${i(s.person||"No one set")}</td><td>${i(T(s.time))}</td><td class="num">${F(s.durationSecs)}</td><td class="num">${F(s.songPos)}</td></tr>`).join("")}</tbody></table></div>`:""}
+      <div class="pad">
+        <b style="font-size:14px">${n.track?`Log for this track only (${n.log.length})`:`Song log, without per-track lines (${n.log.length})`}</b>
+        <div class="loglist" style="margin-top:10px">${n.log.length===0?'<span style="color:var(--mute)">No log lines yet.</span>':[...n.log].reverse().map(s=>`<div><span class="ty">${i(s.type)}</span>${i(s.text)}<time>${i(T(s.time))}</time></div>`).join("")}</div>
+      </div>`}catch(n){o("#fdBody").innerHTML=`<div class="pad status err">${i(n.message)}</div>`}}async function It(){o("#melodyUntested").textContent=vt;for(let e of["#libTable","#idTable"])o(e).addEventListener("click",t=>{let r=t.target.closest("[data-detail]")?.dataset.detail;r&&gr(r)});o("#fdClose").addEventListener("click",()=>{o("#fpDetail").hidden=!0}),Pe(o("#libDrop"),o("#libFiles"),e=>void mr(e)),Pe(o("#idDrop"),o("#idFile"),e=>{e[0]&&hr(e[0])}),o("#libTable").addEventListener("click",e=>{let t=e.target.closest("[data-remove]")?.dataset.remove;t&&(A=A.filter(r=>r.id!==t),xt(t),me())}),o("#libClear").addEventListener("click",()=>{A=A.filter(e=>e.fromSong),Mt(),me(),z("#libStatus","Removed the files you added. Fingerprints synced from the plugin stay.")}),x("identify",yr),me(),A=[...A,...await Et()],me()}var At=new Set;async function yr(){try{for(let e of await c.backend.fingerprints()){let t=`${e.workId}/${e.fpId}/${e.bounce}/${e.name}`;if(At.has(t))continue;let r=Oe(await c.backend.fingerprintData(e));r&&(At.add(t),A.push({id:t,kind:e.kind,fromSong:e.title,ref:{workId:e.workId,fpId:e.fpId,track:e.track},frames:r.frames,secondsPerFrame:r.secondsPerFrame,seconds:e.seconds,name:e.kind==="Master"?`${e.title}, bounce ${e.bounce}`:`${e.name} \xB7 ${e.title}, bounce ${e.bounce}`}))}me()}catch{}}function Ht(e){o("#threadTitle").textContent=`${e.title} \xB7 ${e.people.join(", ")}`,o("#chat").innerHTML=e.messages.length===0?'<div style="color:var(--mute);font-size:14px">No messages on this song yet.</div>':e.messages.map(t=>`<div class="bubble${t.mine?" mine":""}"><small>${i(t.mine?"You":t.author)} \xB7 ${i(T(t.time))}</small>${i(t.body)}</div>`).join("")}async function Nt(){let e=await c.backend.works();if(o("#chatForm").hidden=e.length===0,e.length===0){o("#threads").innerHTML='<div class="pad" style="color:var(--mute)">Messages are kept per song. Add a song first.</div>',o("#chat").innerHTML="";return}(!c.workId||!e.some(t=>t.id===c.workId))&&(c.workId=e[0].id),o("#threads").innerHTML=e.map(t=>`
+    <button class="thread" type="button" data-thread="${i(t.id)}" aria-pressed="${t.id===c.workId}">
+      <b>${i(t.title)}</b><small>${i(t.album||"Single")}</small>
+      <span class="st ${re[t.status][0]}">${re[t.status][1]}</span>
+    </button>`).join(""),Ht(await c.backend.work(c.workId))}function Dt(){x("messages",Nt),o("#threads").addEventListener("click",e=>{let t=e.target.closest("[data-thread]")?.dataset.thread;t&&(c.workId=t,Nt())}),o("#chatForm").addEventListener("submit",async e=>{e.preventDefault();let t=o("#chatText"),r=t.value.trim();if(!(!r||!c.workId))try{Ht(await c.backend.postMessage(c.workId,r)),t.value=""}catch(n){k(n.message)}})}function Ft(){let e=o("#heroLock"),t=o("#heroChip");e.addEventListener("click",()=>{let r=e.dataset.on!=="1";e.dataset.on=r?"1":"0",e.textContent=r?"Unlock":"Lock splits",e.className=`pill ${r?"ghost":"white"}`,t.textContent=r?"Locked":"Not locked",t.className=`chip${r?" on":""}`})}var Ke=["artistName","legalName","role","pro","ipi","publisher","publisherIpi","isni","phone"];var Ot=e=>o(`#pf-${e}`),pe=[],ne=new Set;function ue(e){pe=e,o("#keyTable tbody").innerHTML=pe.length===0?'<tr><td colspan="5" style="color:var(--mute)">No computers linked yet.</td></tr>':pe.map(t=>`<tr><td>${i(t.name)}</td>
+        <td><code class="keycode">${ne.has(t.id)?i(t.key):`${i(t.key.slice(0,8))}\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022`}</code>
+          <button type="button" class="x" data-show="${t.id}">${ne.has(t.id)?"Hide":"Show"}</button>
+          <button type="button" class="x" data-copy="${t.id}">Copy</button></td>
+        <td>${i(T(t.createdAt))}</td><td>${t.lastUsedAt?i(T(t.lastUsedAt)):"Never"}</td>
+        <td><button type="button" class="x" data-revoke="${t.id}">Remove</button></td></tr>`).join("")}function Ct(){o("#keyError").textContent="",o("#dataError").textContent="",o("#exportOut").hidden=!0,o("#exportCopy").hidden=!0,o("#deletePass").value="",c.backend.pluginKeys().then(ue).catch(()=>ue([]));let e=c.user;if(e){o("#pf-role").innerHTML=[...new Set([...le,e.role])].map(t=>`<option>${i(t)}</option>`).join("");for(let t of Ke)Ot(t).value=e[t];o("#pf-email").value=e.email,o("#aidValue").textContent=e.artistId,o("#pfAvatar").textContent=te(e.artistName),o("#pfError").textContent=""}}function Rt(){x("profile",Ct),o("#exportBtn").addEventListener("click",async()=>{try{let e=o("#exportOut");e.value=JSON.stringify(await c.backend.exportMyData(),null,2),e.hidden=!1,o("#exportCopy").hidden=!1}catch(e){o("#dataError").textContent=e.message}}),o("#exportCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(o("#exportOut").value),k("Copied")}catch{o("#exportOut").select()}}),o("#deleteAccountForm").addEventListener("submit",async e=>{e.preventDefault();try{await c.backend.deleteAccount(o("#deletePass").value),c.user=null,c.workId=null,k("Your account is deleted"),L("home")}catch(t){o("#dataError").textContent=t.message}}),o("#aidCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(o("#aidValue").textContent??""),k("Artist ID copied")}catch{k("Select the ID and copy it")}}),o("#keyForm").addEventListener("submit",async e=>{e.preventDefault();try{let t=await c.backend.createPluginKey(o("#keyName").value);o("#keyError").textContent="",o("#keyName").value="";let r=t.keys.find(n=>n.key===t.key);r&&ne.add(r.id),ue(t.keys)}catch(t){o("#keyError").textContent=t.message}}),o("#keyTable").addEventListener("click",async e=>{let t=e.target.closest("[data-show],[data-copy],[data-revoke]")?.dataset;if(t){if(t.show){let r=Number(t.show);ne.has(r)?ne.delete(r):ne.add(r),ue(pe)}if(t.copy){let r=pe.find(n=>n.id===Number(t.copy));try{await navigator.clipboard.writeText(r?.key??""),k("Key copied")}catch{ne.add(Number(t.copy)),ue(pe),k("Select the key and copy it")}}t.revoke&&ue(await c.backend.revokePluginKey(Number(t.revoke)))}}),o("#profileForm").addEventListener("submit",async e=>{e.preventDefault();let t=Object.fromEntries(Ke.map(r=>[r,Ot(r).value]));try{c.user=await c.backend.saveProfile(t),Ct(),k("Profile saved")}catch(r){o("#pfError").textContent=r.message}})}var ae=null;async function br(e){let t;try{t=JSON.parse(e)}catch{throw new Error('That file is not an offline receipt. In the plugin: Evidence tab, "Save offline receipt".')}if(t?.format!=="split-tracker-receipt"||typeof t.payload!="string")throw new Error('That file is not an offline receipt. In the plugin: Evidence tab, "Save offline receipt".');if(await Z(new TextEncoder().encode(t.payload))!==t.payloadSha256)throw new Error("This receipt is damaged, or was changed after the plugin saved it. Ask for it to be saved and sent again.");return{receipt:t,payload:JSON.parse(t.payload)}}async function Wt(e){let t=o("#rcPreview");try{ae=await br(await e.text())}catch(l){ae=null,t.hidden=!0,k(l.message);return}let{receipt:r,payload:n}=ae,a=n.contributors??[],s=(n.bounces??[]).reduce((l,h)=>l+(h.stems?.length??0),0),d=(await c.backend.works()).filter(l=>l.isOwner),m=(n.ownerArtistId??"").trim();o("#rcSummary").innerHTML=`
+    <div><b>${i(n.title||"Untitled")}</b> <span class="st ok">File is whole</span> ${n.splitsConfirmed?'<span class="st ok">Split locked in the plugin</span>':'<span class="st idle">Split not locked</span>'}</div>
+    <div style="color:var(--mute);font-size:13px;margin:4px 0 10px">Saved ${i(T(r.madeAt))} on ${i(r.computer||"an unnamed computer")}${r.madeBy?`, linked as ${i(r.madeBy)}`:", not linked to an account"}.
+      ${(n.takes??[]).length} takes, ${(n.bounces??[]).length} bounces, ${s} stems, ${Object.keys(r.fingerprints??{}).length} fingerprints, ${(n.log?.entries??[]).length} log entries. No audio.</div>
+    ${a.length===0?'<div style="color:var(--mute)">No split in this receipt.</div>':`<div class="scroll"><table>
+      <thead><tr><th>Artist name</th><th>Role</th><th>Artist ID</th><th class="num">Writer %</th><th class="num">Master %</th></tr></thead>
+      <tbody>${a.map(l=>`<tr><td>${i(l.artistName??"")}</td><td>${i(l.role??"")}</td><td>${i(l.artistId||"not signed up")}</td><td class="num">${i(l.writerShare??0)}</td><td class="num">${i(l.masterShare??0)}</td></tr>`).join("")}</tbody>
+    </table></div>`}`,o("#rcOwnerNamed").textContent=m?`The receipt names the owner: ${m}. That account becomes the owner.`:"The receipt does not name an owner. Nothing is assumed: tick the box if it is you, or set the owner later on the song's page.",o("#rcOwnerWrap").hidden=!!m,o("#rcIAmOwner").checked=!1,o("#rcUseSplit").checked=!1,o("#rcWork").innerHTML=d.map(l=>`<option value="${i(l.id)}">${i(l.title)}${l.status==="draft"?"":` (${i(l.status)})`}</option>`).join(""),o("#rcModeAdd").disabled=d.length===0,o("#rcNoSongs").hidden=d.length>0,o("#rcModeNew").checked=!0,_e(),t.hidden=!1}function _e(){let e=o("#rcModeAdd").checked;o("#rcNewOpts").hidden=e,o("#rcAddOpts").hidden=!e,o("#rcGo").textContent=e?"Upload and add to this song":"Upload and register the song"}function Ut(){x("dashboard",()=>{o("#rcOffline").hidden=c.backend.mode!=="preview"});let e=o("#rcFile");e.addEventListener("change",()=>{let r=e.files?.[0];e.value="",r&&Wt(r)}),o("#rcPick").addEventListener("click",()=>e.click());let t=o("#rcZone");t.addEventListener("dragover",r=>{r.preventDefault(),t.classList.add("over")}),t.addEventListener("dragleave",()=>t.classList.remove("over")),t.addEventListener("drop",r=>{r.preventDefault(),t.classList.remove("over");let n=r.dataTransfer?.files?.[0];n&&Wt(n)}),o("#rcModeNew").addEventListener("change",_e),o("#rcModeAdd").addEventListener("change",_e),o("#rcCancel").addEventListener("click",()=>{ae=null,o("#rcPreview").hidden=!0}),o("#rcGo").addEventListener("click",async()=>{if(!ae)return;let n=o("#rcModeAdd").checked?{mode:"add",workId:o("#rcWork").value,useSplit:o("#rcUseSplit").checked}:{mode:"new",iAmOwner:o("#rcIAmOwner").checked},a=o("#rcGo");a.disabled=!0;try{let s=await c.backend.uploadReceipt(ae.receipt,n);ae=null,o("#rcPreview").hidden=!0,k(`${s.created?"Registered":"Added to"} "${s.title}". ${s.fingerprints} fingerprints stored${s.fingerprintsMissing?`, ${s.fingerprintsMissing} were not in the file`:""}.${s.logIntact?"":" Warning: the plugin log in this receipt does not match its own chain."}`),c.workId=s.workId,L("collaborate")}catch(s){k(s.message)}a.disabled=!1})}var jt={approved:["ok","Approved"],pending:["wait","Pending"],declined:["bad","Declined"],draft:["idle","Not sent"],credit:["idle","Credit only"]},p=null,P=[],oe=!1,he=()=>!!p&&p.isOwner&&p.status!=="signed",Bt=()=>P.map(({status:e,hasAccount:t,...r})=>r);function Ve(){let e=he()?"":" disabled";o("#sheet tbody").innerHTML=P.map((t,r)=>`
+    <tr>
+      <td><span class="name"><span class="av" style="background:var(${ie[r%ie.length]})">${i(te(t.artistName))}</span>
+        <input id="sa${r}" data-i="${r}" data-k="artistName" value="${i(t.artistName)}" aria-label="Artist name" maxlength="80"${e}></span></td>
+      <td><input id="sl${r}" data-i="${r}" data-k="legalName" value="${i(t.legalName)}" placeholder="Add legal name" aria-label="Legal name" maxlength="120"${e}></td>
+      <td><input id="se${r}" data-i="${r}" data-k="email" type="email" value="${i(t.email)}" placeholder="Their email" aria-label="Email" maxlength="254"${e}></td>
+      <td><select id="sr${r}" data-i="${r}" data-k="role" aria-label="Role"${e}>${[...new Set([...le,t.role])].map(n=>`<option${n===t.role?" selected":""}>${i(n)}</option>`).join("")}</select></td>
+      <td class="num"><input id="sw${r}" class="share" data-i="${r}" data-k="writerShare" inputmode="decimal" value="${t.writerShare}" aria-label="Writer share percent"${e}></td>
+      <td class="num"><input id="sm${r}" class="share" data-i="${r}" data-k="masterShare" inputmode="decimal" value="${t.masterShare}" aria-label="Master share percent"${e}></td>
+      <td><span class="st ${jt[t.status][0]}">${jt[t.status][1]}</span>${t.hasAccount===!1&&(t.writerShare>0||t.masterShare>0)?' <span class="st bad" title="They need to sign up with this email before the sheet can be sent">Not signed up</span>':""}</td>
+      <td>${he()&&P.length>1?`<button type="button" class="x" data-drop="${r}">Remove</button>`:""}</td>
+    </tr>`).join("")}function Te(){if(!p)return;o("#sumW").textContent=String(ye(P,"writerShare")),o("#sumM").textContent=String(ye(P,"masterShare"));let e=he()?ve(P):"";o("#why").textContent=e;let t=o("#sheetActions"),r=n=>`<span class="hint">${n}</span>`;p.status==="signed"?t.innerHTML=r("Signed by everyone with a share. This sheet can no longer be changed."):p.isOwner&&p.status==="draft"?t.innerHTML=`<button class="btn line" type="button" data-act="save"${oe?"":" disabled"}>Save</button>
+      <button class="btn dark" type="button" data-act="send"${e?" disabled":""}>Send for approval</button>
+      ${r("Everyone with a share gets it on their Overview when they sign in with the email you entered.")}`:p.isOwner?t.innerHTML=(oe?'<button class="btn line" type="button" data-act="save">Save changes</button>':"")+r(`Sent. Waiting for ${p.awaiting} ${p.awaiting===1?"person":"people"}. Changing anything withdraws the approvals given so far.`):p.status==="sent"&&p.yourDecision==="none"?t.innerHTML=`<button class="btn ok" type="button" data-act="approved">Approve my share</button>
+      <button class="btn no" type="button" data-act="declined">Decline</button>${r("Check your legal name and both shares first.")}`:p.status==="sent"?t.innerHTML=r(p.yourDecision==="approved"?"You approved this split. Waiting for the others.":p.yourDecision==="declined"?"You declined this split. Message the owner to agree a change.":"Waiting for the people with a share to approve."):t.innerHTML=r("The owner is still working on this split.")}function wr(){if(!p)return;o("#workTitle").textContent=p.title;let[e,t]=re[p.status];o("#sheetState").innerHTML=`<span class="st ${e}">${t}</span>`,o("#addRow").hidden=!he(),Ve(),Te(),o("#ffTitle").value=p.title,o("#ffAlbum").value=p.album,o("#ffIsrc").value=p.isrc,o("#ffIswc").value=p.iswc;for(let n of["#ffTitle","#ffAlbum","#ffIsrc","#ffIswc","#ffSave"])o(n).disabled=!p.isOwner;o("#ownerName").textContent=`${p.ownerName} \xB7 ${p.ownerArtistId}${p.youOwn?" (you)":""}`,o("#songCode").textContent=p.songCode,o("#ownerTag").innerHTML=p.ownerStated?'<span class="st ok">Owner stated</span>':'<span class="st wait">Owner not stated yet</span>',o("#ownerHelp").textContent=p.ownerStated?"A collaborator working in their own separate project joins this song by typing the song code and the owner's Artist ID into Song details in their plugin. They must already be on the split sheet.":"Nobody else can join this song until its owner is stated. Say who owns it here, or in Song details in the plugin.",o("#ownerForm").hidden=!(p.youOwn||p.isOwner&&!p.ownerStated)||p.status==="signed",o("#ownerMe").hidden=p.ownerStated&&p.youOwn;let r=n=>n>0?`${Math.floor(n/3600)}h ${String(Math.floor(n%3600/60)).padStart(2,"0")}m`:"\u2014";o("#regTable tbody").innerHTML=p.rows.map(n=>`<tr><td>${i(n.artistName)}</td><td class="mono">${i(n.artistId||"\u2014")}</td><td>${i(n.pro||"\u2014")}</td><td>${i(n.ipi||"\u2014")}</td>
+    <td>${i(n.publisher||"\u2014")}</td><td>${i(n.publisherIpi||"\u2014")}</td><td>${i(n.terms||"\u2014")}</td><td class="num">${r(n.seconds??0)}</td></tr>`).join(""),o("#deleteForm").hidden=!p.youOwn||p.status==="signed",o("#deleteTitle").value="",o("#chain").innerHTML=c.backend.mode==="preview"?"":p.chainIntact?'<span class="st ok">History intact</span>':'<span class="st bad">History has been altered</span>',kr(p.evidence,p.sources),o("#history").innerHTML=[...p.events].reverse().map(n=>`<div><span class="ty">${i(n.type)}</span>${i(n.text)}<time>${i(T(n.time))}</time></div>`).join("")}var vr=e=>`${Math.floor(e/3600)}h ${String(Math.floor(e%3600/60)).padStart(2,"0")}m`;function kr(e,t=[]){if(!e){o("#evState").innerHTML='<span class="st idle">Not synced</span>',o("#evBody").innerHTML=`<div class="pad" style="color:var(--mute);font-size:14px">Nothing from the plugin yet. Create a plugin key on your Profile page, paste it into Split Tracker's Evidence tab and press Sync. Takes, stems and bounces for this song will appear here.</div>`;return}o("#evState").innerHTML=e.logIntact?'<span class="st ok">Plugin log intact</span>':'<span class="st bad">Plugin log has been altered</span>';let r=e.bounces.flatMap(a=>a.stems.map(s=>({...s,bounce:a.num}))),n=a=>r.filter(s=>s.trackName===a).pop();o("#evBody").innerHTML=`
+    <div class="evgrid">
+      <div><small>Session time</small><b>${vr(e.sessionSeconds)}</b></div>
+      <div><small>Bounces</small><b>${e.bounces.length}</b></div>
+      <div><small>Splits in the plugin</small><b>${e.splitsLocked?"Locked":"Not locked"}</b></div>
+      <div><small>Last synced</small><b>${i(T(e.syncedAt))}</b></div>
+    </div>
+    ${t.length>1||t.some(a=>a.receiptUploadedBy)?`<div class="pad" style="border-bottom:1px solid var(--rule);font-size:14px"><b>${t.length===1?"One project feeds this song, from an offline receipt.":`${t.length} separate projects feed this song.`}</b> Each keeps its own record; none replaces another.<div class="feed" style="margin-top:8px">${t.map(a=>`<div>${a.receiptUploadedBy?`Offline receipt from ${i(a.artistName)}, uploaded by ${i(a.receiptUploadedBy)}`:`${i(a.artistName)}'s project${a.isOwner?" (owner)":""}`}: ${a.tracks} tracks, ${a.takes} takes, ${a.bounces} bounces, log ${a.logIntact?"intact":"ALTERED"}<time>${a.receiptUploadedBy?"uploaded":"synced"} ${i(T(a.syncedAt))}</time></div>`).join("")}</div></div>`:""}
+    ${e.tracks.some(a=>!a.person)?`<div class="pad" style="border-bottom:1px solid var(--rule);font-size:14px;color:var(--wait)"><b>${e.tracks.filter(a=>!a.person).length} of ${e.tracks.length} tracks have no artist set.</b> In the DAW, open Split Tag on each of those tracks and choose who performed it, then bounce again. Stems and takes are only credited to an artist when the track is tagged.</div>`:""}
+    <div class="scroll"><table>
+      <thead><tr><th>Track</th><th>Artist</th><th>From</th><th class="num">Takes</th><th class="num">Recorded</th><th>Stem fingerprint</th></tr></thead>
+      <tbody>${e.tracks.length===0?'<tr><td colspan="6" style="color:var(--mute)">No tagged tracks yet. Put Split Tag on every track and choose who performed it, so stems and takes are credited to the right artist.</td></tr>':e.tracks.map(a=>{let s=n(a.trackName);return`<tr><td>${i(a.trackName)}</td><td>${i(a.person||"No one set")}</td><td>${i(a.source?a.source.endsWith("receipt")?a.source:`${a.source}'s project`:"This project")}</td><td class="num">${a.takes}</td><td class="num">${F(a.recordSeconds)}</td>
+          <td class="mono">${s?`${i(s.fpId.slice(0,16))}\u2026 \xB7 bounce ${s.bounce}`:"\u2014"}</td></tr>`}).join("")}</tbody>
+    </table></div>
+    <div class="pad mono" style="border-top:1px solid var(--rule)">
+      ${e.project?`Project file ${i(e.project.fileName)}${e.project.daw?` (${i(e.project.daw)})`:""}, signed ${i(T(e.project.time))}${(e.projects?.length??0)>1?`, ${e.projects.length} versions signed so far`:""}: ${i(e.project.sha)}<br>`:"Project file: not signed yet<br>"}
+      ${e.bounces.map(a=>`Bounce ${a.num}, ${F(a.durationSecs)}: ${i(a.fpId.slice(0,32))}\u2026`).join("<br>")}
+      ${e.bounces.length?"<br>":""}Plugin log: ${e.logEntries} entries, head ${i(e.chainHead.slice(0,32))}\u2026
+    </div>`}function fe(e){p=e,P=e.rows.map(t=>({...t})),oe=!1,wr()}async function Ge(){let e=await c.backend.works();if(o("#noWork").hidden=e.length>0,o("#workBody").hidden=e.length===0,o("#workPick").hidden=e.length===0,e.length===0){p=null,o("#workTitle").textContent="Split sheets",o("#sheetState").innerHTML="";return}(!c.workId||!e.some(t=>t.id===c.workId))&&(c.workId=e[0].id),o("#workPick").innerHTML=He(e).map(([t,r])=>`<optgroup label="${i(t||"Singles")}">${r.map(n=>`<option value="${i(n.id)}"${n.id===c.workId?" selected":""}>${i(n.title)}</option>`).join("")}</optgroup>`).join(""),o("#albumList").innerHTML=[...new Set(e.map(t=>t.album).filter(Boolean))].map(t=>`<option value="${i(t)}">`).join(""),fe(await c.backend.work(c.workId))}async function Sr(e){if(p)try{e==="save"&&(fe(await c.backend.savePeople(p.id,Bt())),k("Saved")),e==="send"&&(oe&&fe(await c.backend.savePeople(p.id,Bt())),fe(await c.backend.send(p.id)),k(p.status==="signed"?"Signed":"Sent for approval")),(e==="approved"||e==="declined")&&(fe(await c.backend.decide(p.id,e)),k(e==="approved"?"Approved":"Declined"))}catch(t){k(t.message)}}function Kt(){x("collaborate",Ge);let e=r=>{let n=r.target,a=Number(n.dataset.i),s=n.dataset.k;!s||!P[a]||!he()||(s==="writerShare"||s==="masterShare"?P[a][s]=parseFloat(n.value)||0:P[a][s]=n.value,s==="email"&&(P[a].hasAccount=void 0),oe=!0,Te())};o("#sheet").addEventListener("input",e),o("#sheet").addEventListener("change",e),o("#sheet").addEventListener("click",r=>{let n=r.target.closest("[data-drop]")?.dataset.drop;n===void 0||!he()||(P.splice(Number(n),1),oe=!0,Ve(),Te())}),o("#addRow").addEventListener("click",()=>{P.push({artistName:"New collaborator",legalName:"",role:"Songwriter",writerShare:0,masterShare:0,email:"",status:"draft"}),oe=!0,Ve(),Te()}),o("#sheetActions").addEventListener("click",r=>{let n=r.target.closest("[data-act]")?.dataset.act;n&&Sr(n)}),o("#workPick").addEventListener("change",r=>{c.workId=r.target.value,Ge()}),o("#fileForm").addEventListener("submit",async r=>{if(r.preventDefault(),!!p)try{await c.backend.updateWork(p.id,{title:o("#ffTitle").value,album:o("#ffAlbum").value,isrc:o("#ffIsrc").value,iswc:o("#ffIswc").value}),k("Saved"),await Ge()}catch(n){k(n.message)}});let t=async r=>{if(p)try{let n=await c.backend.setOwner(p.id,r);if(!n||n.handedOver){k("Handed over"),c.workId=null,L("dashboard");return}fe(n),k("Owner set")}catch(n){k(n.message)}};o("#ownerMe").addEventListener("click",()=>void t(c.user?.artistId??"")),o("#ownerForm").addEventListener("submit",r=>{r.preventDefault(),t(o("#ownerId").value)}),o("#songCodeCopy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(o("#songCode").textContent??""),k("Song code copied")}catch{k("Select the code and copy it")}}),o("#deleteForm").addEventListener("submit",async r=>{if(r.preventDefault(),!!p)try{await c.backend.deleteWork(p.id,o("#deleteTitle").value),k("Song deleted"),c.workId=null,L("dashboard")}catch(n){k(n.message)}})}async function _t(e){let t=new DataView(e),r=new Uint8Array(e),n=-1;for(let h=r.length-22;h>=Math.max(0,r.length-22-65535);h--)if(t.getUint32(h,!0)===101010256){n=h;break}if(n<0)throw new Error("That is not a zip file");let a=t.getUint16(n+10,!0),s=t.getUint32(n+12,!0),d=t.getUint32(n+16,!0);if(a===65535||s===4294967295||d===4294967295)throw new Error("This zip is over 4 GB, which is not supported yet");let m=new TextDecoder("utf-8"),l=[];for(let h=0;h<a;h++){if(t.getUint32(d,!0)!==33639248)throw new Error("This zip is damaged");let b=t.getUint16(d+10,!0),y=t.getUint32(d+20,!0),S=t.getUint32(d+24,!0),w=t.getUint16(d+28,!0),u=t.getUint16(d+30,!0),$=t.getUint16(d+32,!0),f=t.getUint32(d+42,!0),g=m.decode(r.subarray(d+46,d+46+w));if(d+=46+w+u+$,!g.endsWith("/")){if(y===4294967295||S===4294967295)throw new Error("This zip is over 4 GB, which is not supported yet");l.push({path:g,async data(){let M=f+30+t.getUint16(f+26,!0)+t.getUint16(f+28,!0),_=r.subarray(M,M+y);if(b===0)return _;if(b!==8)throw new Error(`"${g}" uses a compression this page cannot read`);let N=new Blob([_]).stream().pipeThrough(new DecompressionStream("deflate-raw"));return new Uint8Array(await new Response(N).arrayBuffer())}})}}return l}function Gt(e){let t=e.filter(a=>!a.path.startsWith("__MACOSX/")&&!a.path.includes("/__MACOSX/")),r=t[0]?.path.split("/")[0];return t.length>0&&t.every(a=>a.path.includes("/")&&a.path.split("/")[0]===r)?t.map(a=>({path:a.path.slice(r.length+1),data:a.data})):t}var R="",xe=[];function we(){let e=o("#vfExpect").value.trim().toLowerCase(),t=o("#vfVerdict");if(t.className="verdict",!R){t.textContent="Choose a file. It is checked against every signature your plugin has uploaded.";return}let r=xe.find(n=>n.sha===R);if(r){t.classList.add("yes"),t.textContent=r.kind==="Project file"?`Match. This is the project of "${r.title}" exactly as it was saved when the plugin signed it on ${T(r.time)}${r.latest?", the latest signed version.":". Newer versions have been signed since."}`:`Match. This is the sealed export of "${r.title}", ${r.label.toLowerCase()}, recorded on ${T(r.time)}.`;return}if(e){if(!gt(e)){t.textContent="That is not a full SHA-256 code. It should be 64 letters and digits.";return}let n=e===R;t.classList.add(n?"yes":"no"),t.textContent=n?"Match. This is exactly the file named on the receipt.":"No match. This file differs from the one on the receipt, even if only by one byte.";return}xe.length>0?(t.classList.add("no"),t.textContent=`No match. This file is not any of the ${xe.length} project or export versions your plugin has signed. If it was changed and saved after the last bounce, that is expected.`):t.textContent="Nothing from the plugin to compare with yet. Paste the code from a receipt, or sync the plugin first."}function I(e,t=!1){let r=o("#vfStatus");r.textContent=e,r.classList.toggle("err",t)}async function $r(e){I(`Opening ${e.name}\u2026`);try{let t=Gt(await _t(await e.arrayBuffer())),r=[];for(let n=0;n<t.length;n++)I(`Reading ${n+1} of ${t.length}\u2026`),r.push({path:t[n].path,sha:await Z(await t[n].data())});R=await Re(r),o("#vfSha").textContent=`SHA-256 ${R}`,I(`${e.name.replace(/\.zip$/i,"")}, ${r.filter(n=>n.path.split("/").pop()!==".DS_Store").length} files (from the zip)`)}catch(t){R="",o("#vfSha").textContent="",I(t.message||`Could not read ${e.name}.`,!0)}we()}async function Ze(e){if(/\.zip$/i.test(e.name))return $r(e);I(`Reading ${e.name}\u2026`);try{R=await Z(await e.arrayBuffer()),o("#vfSha").textContent=`SHA-256 ${R}`,I(`${e.name}, ${e.size.toLocaleString()} bytes`)}catch{R="",o("#vfSha").textContent="",I(`Could not read ${e.name}. If it is a project folder such as a Logic .logicx, right-click it in Finder, choose Compress, and choose the .zip here.`,!0)}we()}async function qe(e,t){if(t.length===0){I(`${e} has no files in it.`,!0);return}let r=t;try{let n=[];for(let a=0;a<r.length;a++)I(`Reading ${a+1} of ${r.length}\u2026`),n.push({path:r[a].path,sha:await Z(await r[a].file.arrayBuffer())});R=await Re(n),o("#vfSha").textContent=`SHA-256 ${R}`,I(`${e}, ${r.length} files`)}catch{R="",o("#vfSha").textContent="",I(`Could not read ${e}.`,!0)}we()}async function Ye(e,t){let r=e.createReader(),n=[];for(;;){let s=await new Promise((d,m)=>r.readEntries(d,m));if(s.length===0)break;n.push(...s)}let a=[];for(let s of n){let d=t+s.name;s.isDirectory?a.push(...await Ye(s,`${d}/`)):a.push({path:d,file:await new Promise((m,l)=>s.file(m,l))})}return a}function Vt(){x("verify",async()=>{xe=await c.backend.signatures().catch(()=>[]),we()});let e=o("#vfFile"),t=o("#vfFolder");e.addEventListener("change",()=>{e.files?.[0]&&Ze(e.files[0])}),t.addEventListener("change",()=>{let n=Array.from(t.files??[]);n.length!==0&&qe(n[0].webkitRelativePath.split("/")[0],n.map(a=>({path:a.webkitRelativePath.split("/").slice(1).join("/"),file:a})))}),document.addEventListener("paste",async n=>{if(o('[data-view="verify"]').hidden)return;let a=Array.from(n.clipboardData?.items??[]).find(m=>m.kind==="file");if(!a)return;n.preventDefault();let s=a.webkitGetAsEntry?.();if(s?.isDirectory){I(`Listing ${s.name}\u2026`),qe(s.name,await Ye(s,""));return}let d=a.getAsFile();d&&Ze(d)});let r=o('[data-view="verify"]');r.addEventListener("dragover",n=>n.preventDefault()),r.addEventListener("drop",async n=>{n.preventDefault();let s=n.dataTransfer?.items?.[0]?.webkitGetAsEntry?.();if(s){if(s.isFile){let d=n.dataTransfer?.files?.[0];d&&Ze(d);return}I(`Listing ${s.name}\u2026`),qe(s.name,await Ye(s,""))}}),o("#vfExpect").addEventListener("input",we)}async function Er(){await Je()&&(c.backend=Le,c.user=await Le.me()),o("#previewBanner").hidden=c.backend.mode!=="preview",Ft(),it(),ut(),Ut(),Kt(),Dt(),Rt(),Vt(),It(),ot()}Er();})();
+
+</script>

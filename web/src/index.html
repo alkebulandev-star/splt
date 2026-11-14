@@ -1,0 +1,467 @@
+<title>Split Tracker Web</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/*__CSS__*/
+</style>
+
+
+<!-- ======================= LANDING ======================= -->
+<div id="site">
+  <div class="wrap">
+    <div class="nav">
+      <div class="logo"><i></i><span>Split Tracker</span></div>
+      <div class="links">
+        <button type="button" data-jump="how">How it works</button>
+        <button type="button" data-jump="features">What it records</button>
+        <button type="button" data-jump="privacy">Privacy</button>
+      </div>
+      <a class="pill ghost" href="#sign-in">Sign in</a>
+      <a class="pill white" href="#sign-up">Sign up</a>
+    </div>
+
+    <div class="hero">
+      <div>
+        <h1>Lock the splits <span>before the song leaves</span> the room.</h1>
+        <p class="sub">Split Tracker sits in your session and keeps the record while you work: who was on which track, for how long, and what share you all agreed.</p>
+        <div class="cta">
+          <a class="pill white" href="https://example.com/register">Get the plugin</a>
+          <a class="pill ghost" href="#sign-up">Create an account</a>
+        </div>
+        <p class="fine">AU and VST3 for Mac. No audio or voice is ever recorded.</p>
+      </div>
+      <div class="stage">
+        <div class="disc" aria-hidden="true"><div class="glow"></div><div class="clip"><div class="face"></div></div><div class="hole">100%</div></div>
+        <div class="rows">
+          <div class="row"><span class="av" style="background:var(--p1)">NK</span><span class="who"><b>Nova Kane</b><small>Artist, writer</small></span><span class="pc">40%</span></div>
+          <div class="row"><span class="av" style="background:var(--p2)">LV</span><span class="who"><b>Lil Vanta</b><small>Featured artist</small></span><span class="pc">25%</span></div>
+          <div class="row"><span class="av" style="background:var(--p3)">DH</span><span class="who"><b>DJ Halcyon</b><small>Producer</small></span><span class="pc">20%</span></div>
+          <div class="row"><span class="av" style="background:var(--p4)">RS</span><span class="who"><b>Riko Santos</b><small>Writer</small></span><span class="pc">15%</span></div>
+          <div class="lockbar">
+            <button type="button" class="pill white" id="heroLock">Lock splits</button>
+            <span class="chip" id="heroChip">Not locked</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <hr class="hair">
+
+  <div class="wrap">
+    <section id="how">
+      <p class="eyebrow">How it works</p>
+      <h2>Three steps, in the order you already work.</h2>
+      <div class="steps">
+        <div class="step"><span class="n">1</span><h3>Put Split Tracker on the master</h3><p>It names the song and starts the session clock the moment you press play.</p></div>
+        <div class="step"><span class="n">2</span><h3>Drop Split Tag on each track</h3><p>Tap the person who is on that track. Every tag links to the master by itself.</p></div>
+        <div class="step"><span class="n">3</span><h3>Agree the shares and lock</h3><p>Shares must total 100% and everyone needs a legal name. Then one button seals it.</p></div>
+      </div>
+    </section>
+  </div>
+  <hr class="hair">
+
+  <div class="wrap">
+    <section id="features">
+      <p class="eyebrow">What it records</p>
+      <h2>Everything a split dispute comes down to.</h2>
+      <p class="lead">The plugin shows you a simple summary. Underneath, it keeps the full record so the summary can be backed up later.</p>
+      <div class="feat">
+        <div><span class="tag">SPLIT</span><h3>Split sheet</h3><p>Artist name and legal name, role, writer and master share, PRO, IPI and publisher for each person.</p></div>
+        <div><span class="tag">TAG</span><h3>Who is on each track</h3><p>Split Tag marks a track with a person, so the session knows whose vocal, beat or guitar it is.</p></div>
+        <div><span class="tag">TAKE</span><h3>Numbered takes</h3><p>Each recording pass is logged with who, when, how long and where in the song it started.</p></div>
+        <div><span class="tag">TIME</span><h3>Session time per person</h3><p>Time played and time recorded, per person and per track, across every session on the song.</p></div>
+        <div><span class="tag">STEM</span><h3>Stem fingerprints</h3><p>When you bounce, each tagged track gets its own audio fingerprint, filed under the right artist.</p></div>
+        <div><span class="tag">BOUNCE</span><h3>Bounce receipt</h3><p>One receipt per bounce, listing the master, its stems, the takes and the splits at that moment.</p></div>
+        <div><span class="tag">PROJECT</span><h3>Project-file signature</h3><p>Sign the Logic, FL Studio or any other project file, so you can show which version was yours.</p></div>
+        <div><span class="tag">LOG</span><h3>Tamper-evident log</h3><p>Every entry is chained to the one before it. Change one line and the chain no longer checks out.</p></div>
+        <div><span class="tag">IDENTIFY</span><h3>Identify a track</h3><p>Sign up, drop in any audio, and see which of your masters or stems it is. Your plugin fills the library for you.</p></div>
+      </div>
+
+      <div class="proof">
+        <div class="shot">
+          <h3>Session, by track</h3>
+          <div class="lane"><span>Lead Vox</span><span class="t"><i style="left:6%;width:28%;background:var(--p1)"></i><i style="left:52%;width:30%;background:var(--p1)"></i></span><span>3 takes</span></div>
+          <div class="lane"><span>Feature</span><span class="t"><i style="left:38%;width:22%;background:var(--p2)"></i></span><span>2 takes</span></div>
+          <div class="lane"><span>808 Drums</span><span class="t"><i style="left:0;width:92%;background:var(--p3)"></i></span><span>1 take</span></div>
+          <div class="lane"><span>Guitar</span><span class="t"><i style="left:20%;width:14%;background:var(--p4)"></i><i style="left:70%;width:18%;background:var(--p4)"></i></span><span>4 takes</span></div>
+        </div>
+        <div class="shot">
+          <h3>Log</h3>
+          <div class="log">
+            <div>21:04:12 &nbsp;<b>TAKE</b> &nbsp;#3 Lead Vox · Nova Kane · 0:48 at bar 17 &nbsp;<em>9f2c…a71e</em></div>
+            <div>21:19:40 &nbsp;<b>LOCK</b> &nbsp;splits locked at 100% &nbsp;<em>41b8…03d5</em></div>
+            <div>21:22:05 &nbsp;<b>BOUNCE</b> &nbsp;Night Signal · 3:12 &nbsp;<em>c6e0…7b9a</em></div>
+            <div>21:22:08 &nbsp;<b>STEM</b> &nbsp;Lead Vox → Nova Kane &nbsp;<em>d13f…52c4</em></div>
+            <div>21:22:08 &nbsp;<b>STEM</b> &nbsp;808 Drums → DJ Halcyon &nbsp;<em>77aa…e810</em></div>
+            <div>21:25:31 &nbsp;<b>PROJECT</b> &nbsp;Night Signal.logicx signed &nbsp;<em>0be4…9c26</em></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <hr class="hair">
+
+  <div class="wrap">
+    <section id="privacy">
+      <p class="eyebrow">Privacy</p>
+      <h2>It keeps records. It does not listen.</h2>
+      <div class="never">
+        <div><h3>No voice recognition</h3><p>People are tagged by hand. Nothing tries to identify anyone from how they sound.</p></div>
+        <div><h3>Your audio stays put</h3><p>If you link an account, the plugin uploads your records and fingerprints. A fingerprint is a code worked out from the sound; the sound itself is never copied or sent.</p></div>
+        <div><h3>Works without internet</h3><p>No connection in the studio? The plugin saves one receipt file. Send it to the song's owner, who uploads it after signing in to register the song. It carries records and fingerprints, never audio.</p></div>
+        <div><h3>Everything is disclosed</h3><p>The privacy policy lists every item the plugin stores, including the detail the screen does not show.</p></div>
+      </div>
+      <div class="fits">
+        <span class="on">Mac · AU</span><span class="on">Mac · VST3</span><span class="on">Tested in Logic Pro</span><span>Windows · planned</span>
+      </div>
+    </section>
+  </div>
+  <hr class="hair">
+
+  <div class="close">
+    <div class="wrap">
+      <h2>Every song deserves a clean split.</h2>
+      <a class="pill white" href="https://example.com/register">Get the plugin</a>
+    </div>
+  </div>
+  <div class="wrap">
+    <footer>
+      <div class="logo"><i></i><span>Split Tracker</span></div>
+      <nav><span>Privacy</span><span>Terms</span><span>Support</span><span>Contact</span></nav>
+    </footer>
+  </div>
+</div>
+
+<!-- ======================= SIGN IN ======================= -->
+<div id="signin" hidden>
+  <div class="brand">
+    <a class="logo" href="#home" style="color:inherit;text-decoration:none"><i></i><span>Split Tracker</span></a>
+    <h2>Rights and split management for music teams.</h2>
+    <p style="color:var(--dim);font-size:14px">Your profile, your collaborators and every signed split sheet in one place.</p>
+  </div>
+  <form id="authForm" novalidate>
+    <h1 id="authTitle">Sign in to your account</h1>
+    <p class="muted" id="authNote"></p>
+    <div id="regFields" hidden style="display:grid;gap:16px">
+      <label for="au-artist">Artist name<input id="au-artist" autocomplete="nickname" maxlength="80"></label>
+      <label for="au-legal">Legal name<input id="au-legal" autocomplete="name" maxlength="120"></label>
+    </div>
+    <label for="au-email">Email<input id="au-email" type="email" autocomplete="username" placeholder="you@studio.com"></label>
+    <label for="au-pass">Password<input id="au-pass" type="password" autocomplete="current-password"></label>
+    <div id="authError" class="status err" role="alert"></div>
+    <button class="btn dark" type="submit" id="authSubmit">Sign in</button>
+    <button class="btn line" type="button" id="authSwitch">Create an account</button>
+    <a class="btn link" href="#home">Back to the site</a>
+  </form>
+</div>
+
+<!-- ======================= WORKSPACE ======================= -->
+<div id="shell" hidden>
+  <div class="side">
+    <div class="logo"><i></i><span>Split Tracker</span></div>
+    <button class="tab" type="button" data-go="dashboard">Overview</button>
+    <button class="tab" type="button" data-go="collaborate">Split sheets</button>
+    <button class="tab" type="button" data-go="identify">Identify</button>
+    <button class="tab" type="button" data-go="verify">Verify</button>
+    <button class="tab" type="button" data-go="messages">Messages</button>
+    <button class="tab" type="button" data-go="profile">Profile</button>
+    <div class="foot"><button class="tab" type="button" id="signOut">Sign out</button></div>
+  </div>
+
+  <div class="main">
+    <p class="banner" id="previewBanner" hidden>Preview with example people. Nothing here is saved or sent. Identify and Verify work for real.</p>
+
+    <!-- Overview -->
+    <div data-view="dashboard" hidden>
+      <div class="top"><h1 id="hello">Overview</h1><span class="me" id="meChip"></span></div>
+      <div class="kpis" id="kpis"></div>
+      <div class="cols">
+        <div class="card">
+          <header><h2>Your songs</h2></header>
+          <form class="pad newwork" id="newWork">
+            <input id="nwTitle" placeholder="Song title" aria-label="Song title" maxlength="120">
+            <input id="nwAlbum" placeholder="Album (leave empty for a single)" aria-label="Album" maxlength="120" list="albumList">
+            <select id="nwCopy" aria-label="Start from the split of"></select>
+            <button class="btn dark" type="submit">Add song</button>
+            <input id="nwCollab" placeholder="Collaborator's artist name (optional)" aria-label="Collaborator artist name" maxlength="80">
+            <input id="nwCollabEmail" placeholder="Their Artist ID or email" aria-label="Collaborator Artist ID or email" maxlength="254">
+            <select id="nwCollabRole" aria-label="Collaborator role"></select>
+            <span class="hint">Collaborators sign up first and give you their Artist ID. Shares are set on the split sheet.</span>
+            <datalist id="albumList"></datalist>
+          </form>
+          <div id="worksByAlbum"></div>
+        </div>
+        <div class="card">
+          <header><h2>Activity</h2></header>
+          <div class="pad feed" id="activity"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px" id="receiptCard">
+        <header><h2>Upload an offline receipt</h2><span class="st idle">For studios with no internet</span></header>
+        <div class="pad">
+          <p style="margin:0 0 10px;max-width:86ch">The plugin normally sends its records to your account by itself. When the studio computer is offline, or is not linked to an account, the same records can travel as one file instead.</p>
+          <ol class="howto">
+            <li><b>Tag the tracks first.</b> Split Tag goes on every track, with the artist who performed it chosen. Untagged tracks are not credited to anyone.</li>
+            <li><b>In the plugin</b>, open the Evidence tab and press <b>Save offline receipt</b>. It saves one file ending in <code>.splitreceipt</code>.</li>
+            <li><b>Send the file to the song's owner</b> by email, WhatsApp, AirDrop or a USB stick. If you are the owner, carry it to any computer that is online.</li>
+            <li><b>The owner uploads it here</b> and chooses what to do with it. You see everything in the file before anything is saved.</li>
+          </ol>
+          <p style="color:var(--mute);font-size:13px;margin:10px 0 14px;max-width:86ch">A receipt holds the split, the session records, the tamper-evident log and the fingerprints. It never holds audio. The website checks the file is whole and re-checks the log. Who made it is what the file says, so it is shown as "offline receipt" on the song. Once that computer is online and syncs by itself, the live record replaces the receipt.</p>
+          <div class="rczone" id="rcZone">
+            <button class="btn dark" type="button" id="rcPick">Choose a receipt file</button>
+            <span style="color:var(--mute);font-size:13px">or drop it here</span>
+            <input type="file" id="rcFile" accept=".splitreceipt,.json,application/json" hidden>
+          </div>
+          <p id="rcOffline" class="hint" hidden style="color:var(--mute);font-size:13px;margin-top:8px">This is the preview. You can open a receipt to look inside it; saving it needs the server.</p>
+
+          <div id="rcPreview" hidden style="margin-top:16px">
+            <div id="rcSummary"></div>
+            <div class="rcopts">
+              <label><input type="radio" name="rcMode" id="rcModeNew" checked> <b>Register as a new song</b><small>Creates the song with the split and records in this receipt. If the receipt already belongs to a song on the website, it is added there instead.</small></label>
+              <div id="rcNewOpts" class="rcsub">
+                <span id="rcOwnerNamed"></span>
+                <label id="rcOwnerWrap"><input type="checkbox" id="rcIAmOwner"> I am the owner of this song</label>
+              </div>
+              <label><input type="radio" name="rcMode" id="rcModeAdd"> <b>Add to one of my songs</b><small>For a collaborator's separate project. Its tracks, takes and bounces are added beside yours, labelled as theirs. Nothing of yours is replaced.</small></label>
+              <div id="rcAddOpts" class="rcsub" hidden>
+                <select id="rcWork" aria-label="Song to add it to"></select>
+                <span id="rcNoSongs" hidden>You have no songs yet, so register it as a new song.</span>
+                <label><input type="checkbox" id="rcUseSplit"> Also replace that song's split with the one in this receipt <small>Only while the sheet is a draft. Leave off to keep the split as it is.</small></label>
+              </div>
+            </div>
+            <div class="actions" style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn dark" type="button" id="rcGo">Upload and register the song</button>
+              <button class="btn line" type="button" id="rcCancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Split sheets -->
+    <div data-view="collaborate" hidden>
+      <div class="top"><h1 id="workTitle">Split sheets</h1><select id="workPick" aria-label="Song"></select><span id="sheetState"></span></div>
+      <div class="card" id="noWork" hidden><div class="pad">No songs yet. Add one on the Overview page.</div></div>
+      <div id="workBody">
+        <div class="card">
+          <header><h2>Split sheet</h2><span class="soon"><button class="btn line" type="button" disabled tabindex="-1">Invite by email</button><em>Soon</em></span><button class="btn line" type="button" id="addRow">Add collaborator</button></header>
+          <div class="scroll"><table id="sheet">
+            <thead><tr><th>Artist name</th><th>Legal name</th><th>Email</th><th>Role</th><th class="num">Writer %</th><th class="num">Master %</th><th>Status</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+          <div class="total"><span>Writer <span id="sumW">0</span>% &nbsp;·&nbsp; Master <span id="sumM">0</span>%</span><small id="why"></small></div>
+          <div class="pad actions" id="sheetActions"></div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <header><h2>Owner and song code</h2><span id="ownerTag"></span></header>
+          <div class="pad" style="display:grid;gap:12px">
+            <div class="evgrid plain">
+              <div><small>Owner</small><b id="ownerName"></b></div>
+              <div><small>Song code</small><b><code class="keycode" id="songCode"></code> <button type="button" class="x" id="songCodeCopy">Copy</button></b></div>
+            </div>
+            <p id="ownerHelp" style="color:var(--mute);font-size:14px;max-width:80ch"></p>
+            <form id="ownerForm" style="display:flex;gap:8px;flex-wrap:wrap" hidden>
+              <button class="btn dark" type="button" id="ownerMe">I own this song</button>
+              <input id="ownerId" placeholder="Or the owner's Artist ID" aria-label="Owner's Artist ID" maxlength="20" style="max-width:240px">
+              <button class="btn line" type="submit">Set owner</button>
+            </form>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <header><h2>Registration details</h2></header>
+          <div class="scroll"><table id="regTable">
+            <thead><tr><th>Artist</th><th>Artist ID</th><th>PRO</th><th>IPI</th><th>Publisher</th><th>Publisher IPI</th><th>Deal / notes</th><th class="num">Session time</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+        <div class="card" id="evidenceCard" style="margin-top:16px">
+          <header><h2>From the plugin</h2><span id="evState"></span></header>
+          <div id="evBody"></div>
+        </div>
+        <div class="cols even" style="margin-top:16px">
+          <form class="card" id="fileForm">
+            <header><h2>Song details</h2></header>
+            <div class="pad" style="display:grid;gap:12px">
+              <label for="ffTitle">Song title<input id="ffTitle" maxlength="120"></label>
+              <label for="ffAlbum">Album<input id="ffAlbum" maxlength="120" list="albumList" placeholder="Leave empty for a single"></label>
+              <div class="grid2">
+                <label for="ffIsrc">ISRC<input id="ffIsrc" maxlength="20" placeholder="e.g. US-ABC-26-00001"></label>
+                <label for="ffIswc">ISWC<input id="ffIswc" maxlength="20" placeholder="e.g. T-123.456.789-0"></label>
+              </div>
+              <div><button class="btn line" type="submit" id="ffSave">Save</button></div>
+            </div>
+          </form>
+          <div class="card">
+            <header><h2>History</h2><span id="chain"></span></header>
+            <div class="pad feed" id="history"></div>
+          </div>
+        </div>
+        <form class="card danger" id="deleteForm" style="margin-top:16px" hidden>
+          <header><h2>Delete this song</h2></header>
+          <div class="pad" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input id="deleteTitle" placeholder="Type the song title to confirm" aria-label="Song title to confirm" style="max-width:320px">
+            <button class="btn no" type="submit">Delete song</button>
+            <span style="color:var(--mute);font-size:13px">Removes the sheet, messages and plugin records for everyone. A signed sheet cannot be deleted.</span>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Identify -->
+    <div data-view="identify" hidden>
+      <div class="top"><h1>Identify</h1></div>
+      <p class="note">Files are analysed in this browser. Nothing is uploaded, and no audio is stored: only the fingerprints.</p>
+      <div class="cols even">
+        <div class="card">
+          <header><h2>Your library</h2><button class="btn line" type="button" id="libClear">Clear</button></header>
+          <div class="pad" style="display:grid;gap:12px">
+            <label class="drop" id="libDrop" for="libFiles">
+              <b>Add your masters and stems</b>
+              <span>Drop the <code>.fingerprint</code> files from a bounce receipt folder, or audio files of your own.</span>
+              <input id="libFiles" type="file" multiple accept=".fingerprint,audio/*">
+            </label>
+            <div id="libStatus" class="status" role="status"></div>
+          </div>
+          <div class="scroll"><table id="libTable">
+            <thead><tr><th>Name</th><th>Kind</th><th class="num">Length</th><th>Source</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <header><h2>Identify a sound</h2></header>
+          <div class="pad" style="display:grid;gap:12px">
+            <label class="drop" id="idDrop" for="idFile">
+              <b>Drop the audio you want to check</b>
+              <span>A release, a snippet from a video, a stem someone sent you, or a recording of a melody.</span>
+              <input id="idFile" type="file" accept="audio/*,video/*">
+            </label>
+            <div id="idStatus" class="status" role="status"></div>
+            <div id="idSha" class="mono"></div>
+          </div>
+          <div class="scroll"><table id="idTable" hidden>
+            <thead><tr><th>Reference</th><th>Result</th><th>Weight</th><th class="num">Recording</th><th class="num">Found at</th><th class="num">Melody</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+      </div>
+      <div class="card" id="fpDetail" hidden style="margin-top:16px">
+        <header><h2 id="fdTitle"></h2><span id="fdKind"></span><button class="btn line" type="button" id="fdClose">Close</button></header>
+        <div id="fdBody"></div>
+      </div>
+      <div class="card" style="margin-top:16px"><div class="pad legend">
+        <div><span class="st ok">Same recording</span><span class="wt ev">Evidence</span> The audio itself matches: a copy, a re-encode or an excerpt of your bounce or stem.</div>
+        <div><span class="st wait">Shares material</span><span class="wt ld">Lead</span> Part of it matches. It may be a copy, or a different song using the same beat or sample. Listen before relying on it.</div>
+        <div><span class="st mel">Same melody</span><span class="wt sl">Strong lead</span> The notes match even though the recording differs: pitched up or down, sped up or slowed down. On real songs this was right 95% of the time and never matched a different song. It needs at least 20 seconds and an audio reference.</div>
+        <div><span class="st mel soft">Possibly the same melody</span><span class="wt ld">Lead</span> A weaker match, or a clip under 20 seconds. Shown for the single closest song only. This is also what a single stem inside a full mix shows as: in tests it was found 17 times out of 22, with a wrong song coming up 1.6% of the time.</div>
+        <div class="untested"><b id="melodyUntested"></b> Treat any melody result on a cover as unproven until that is measured.</div>
+      </div></div>
+    </div>
+
+    <!-- Verify -->
+    <div data-view="verify" hidden>
+      <div class="top"><h1>Verify</h1></div>
+      <p class="note">Choose a project or an exported file and it is cross-checked against every signature your plugin has made. The file is read in this browser and never uploaded.</p>
+      <div class="cols even">
+        <div class="card">
+          <header><h2>Exported file or project file</h2></header>
+          <div class="pad" style="display:grid;gap:12px">
+            <label class="drop" for="vfFile"><b>Choose a file</b><span>A sealed export, a single-file project such as .flp or .als, or a zipped project folder. You can also copy the file in Finder and paste it here.</span><input id="vfFile" type="file"></label>
+            <label class="drop" for="vfFolder"><b>Or choose a project folder</b><span>For projects that are ordinary folders.</span><input id="vfFolder" type="file" webkitdirectory></label>
+            <p class="howto"><b>Logic project (.logicx)?</b> Right-click it in Finder, choose <b>Compress</b>, then choose the .zip above. Dragging the .logicx onto this page also works in most browsers.</p>
+            <div id="vfStatus" class="status" role="status"></div>
+            <div id="vfSha" class="mono"></div>
+          </div>
+        </div>
+        <div class="card">
+          <header><h2>Result</h2></header>
+          <div class="pad" style="display:grid;gap:12px">
+            <div id="vfVerdict" class="verdict">Choose a file.</div>
+            <label for="vfExpect">Or compare with a code from a paper receipt<input id="vfExpect" placeholder="Paste the 64-character SHA-256" autocomplete="off" spellcheck="false"></label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div data-view="messages" hidden>
+      <div class="top"><h1>Messages</h1></div>
+      <div class="msgs">
+        <div class="card" id="threads"></div>
+        <div class="card">
+          <header><h2 id="threadTitle">Choose a song</h2></header>
+          <div class="pad" style="display:grid;gap:12px" id="chat"></div>
+          <form class="pad" id="chatForm" style="display:flex;gap:10px;border-top:1px solid var(--rule)">
+            <input id="chatText" placeholder="Write a message to everyone on this song" aria-label="Message" maxlength="2000">
+            <button class="btn dark" type="submit">Send</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile -->
+    <div data-view="profile" hidden>
+      <div class="top"><h1>Profile</h1></div>
+      <form class="card" id="profileForm">
+        <header><h2>Personal details and affiliations</h2></header>
+        <div class="pad" style="display:grid;gap:14px">
+          <div class="name"><span class="av" id="pfAvatar" style="background:var(--p1);width:56px;height:56px;font-size:18px"></span><span style="color:var(--mute);font-size:13px">Your artist name is what collaborators see. Your legal name goes on the split sheet.</span></div>
+          <div class="grid2">
+            <label for="pf-artistName">Artist name<input id="pf-artistName" maxlength="80"></label>
+            <label for="pf-legalName">Legal name<input id="pf-legalName" maxlength="120"></label>
+            <label for="pf-role">Main role<select id="pf-role"></select></label>
+            <label for="pf-pro">PRO<input id="pf-pro" maxlength="60"></label>
+            <label for="pf-ipi">IPI number<input id="pf-ipi" maxlength="40"></label>
+            <label for="pf-publisher">Publisher<input id="pf-publisher" maxlength="120"></label>
+            <label for="pf-publisherIpi">Publisher IPI<input id="pf-publisherIpi" maxlength="40"></label>
+            <label for="pf-isni">ISNI (optional)<input id="pf-isni" maxlength="40" placeholder="0000 0000 0000 0000"></label>
+            <label for="pf-phone">Phone<input id="pf-phone" maxlength="40"></label>
+            <label for="pf-email">Email (used to sign in)<input id="pf-email" disabled></label>
+          </div>
+          <div id="pfError" class="status err" role="alert"></div>
+          <div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn dark" type="submit">Save changes</button></div>
+        </div>
+      </form>
+      <div class="card" style="margin-top:16px">
+        <header><h2>Your Artist ID</h2><button class="btn line" type="button" id="aidCopy">Copy</button></header>
+        <div class="pad" style="display:grid;gap:10px">
+          <code class="artistid" id="aidValue"></code>
+          <p style="color:var(--mute);font-size:14px;max-width:70ch">Give this to anyone adding you to a split sheet. They type it into Split Tracker, or into "Add collaborator" here, and your name and details fill in and the split comes to this account for your approval. It is safe to share: it cannot sign in or upload anything.</p>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <header><h2>Plugin link</h2></header>
+        <div class="pad" style="display:grid;gap:12px">
+          <p style="color:var(--mute);font-size:14px;max-width:70ch">A plugin key is different from your Artist ID: keep it private. It lets Split Tracker on one computer upload its records to this account: splits, session time, takes, bounce and stem fingerprints and its log. Never audio. Create one key per computer and paste it into the plugin's Evidence tab. Your keys stay listed here, so you can copy one again whenever you need it.</p>
+          <form id="keyForm" style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="keyName" placeholder="Name this computer, e.g. Studio Mac" aria-label="Computer name" maxlength="60" style="max-width:320px">
+            <button class="btn dark" type="submit">Create key</button>
+          </form>
+          <div id="keyError" class="status err" role="alert"></div>
+        </div>
+        <div class="scroll"><table id="keyTable">
+          <thead><tr><th>Computer</th><th>Key</th><th>Created</th><th>Last used</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <header><h2>Your data</h2></header>
+        <div class="pad" style="display:grid;gap:12px">
+          <p style="color:var(--mute);font-size:14px;max-width:80ch">You can take a copy of everything held about you, or delete your account. Songs that other people are on have to be handed to another owner or deleted first.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn line" type="button" id="exportBtn">Show a copy of my data</button><button class="btn line" type="button" id="exportCopy" hidden>Copy it</button></div>
+          <textarea id="exportOut" readonly hidden rows="8" aria-label="Your data"></textarea>
+          <form id="deleteAccountForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input id="deletePass" type="password" autocomplete="current-password" placeholder="Your password" aria-label="Password" style="max-width:240px">
+            <button class="btn no" type="submit">Delete my account</button>
+          </form>
+          <div id="dataError" class="status err" role="alert"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" hidden role="status"></div>
+<script>
+/*__JS__*/
+</script>

@@ -1,0 +1,30 @@
+{
+  "name": "split-tracker-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.ts",
+    "check": "npm run typecheck && npm test && npm run build",
+    "start": "npm run build && node server/main.ts",
+    "test:plugin": "node tests/integration/plugin-link.ts",
+    "db:check": "node server/housekeeping.ts check",
+    "db:backup": "node server/housekeeping.ts backup",
+    "db:restore": "node server/housekeeping.ts restore",
+    "test:sync": "node tests/integration/plugin-sync.ts"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "22.9.0",
+    "esbuild": "0.24.0",
+    "typescript": "5.6.3"
+  },
+  "engines": {
+    "node": ">=23.6"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.1.1"
+  }
+}
